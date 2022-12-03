@@ -50,6 +50,7 @@ There are several provided scripts to help with contract management. Before runn
 - ETHERSCAN_API_KEY - Etherscan API key (required for code verification steps)
 - CONTRACTS_RPC_URL - Overrides the default script used network RPC URL when set
 - CONTRACTS_DEPLOYER_KEY - Overrides the default script used network accounts when set
+- CONTRACTS_GAS_PRICE - Overrides the default script used network gas price when set
 
 ### Deploy
 

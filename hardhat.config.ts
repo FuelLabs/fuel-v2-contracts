@@ -54,6 +54,7 @@ if (CONTRACTS_RPC_URL && CONTRACTS_DEPLOYER_KEY && config.networks && config.net
 		url: CONTRACTS_RPC_URL,
 		live: true,
 	};
+	if(process.env.CONTRACTS_GAS_PRICE) config.networks.localhost.gasPrice = parseInt(process.env.CONTRACTS_GAS_PRICE);
 }
 
 export default config;
