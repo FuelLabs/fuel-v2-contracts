@@ -21,6 +21,9 @@ export interface DeployedContractAddresses {
 	FuelMessagePortal: string;
 	FuelSidechainConsensus: string;
 	L1ERC20Gateway: string;
+	FuelMessagePortal_impl: string;
+	FuelSidechainConsensus_impl: string;
+	L1ERC20Gateway_impl: string;
 }
 
 // The harness object.
@@ -38,12 +41,29 @@ export interface HarnessObject {
 	initialTokenAmount: BN;
 }
 
+// Gets a blank set of addresses for the deployed contracts.
+export function getBlankAddresses(): DeployedContractAddresses {
+	return {
+		FuelSidechainConsensus: '',
+		FuelMessagePortal: '',
+		L1ERC20Gateway: '',
+		FuelSidechainConsensus_impl: '',
+		FuelMessagePortal_impl: '',
+		L1ERC20Gateway_impl: '',
+	};
+}
+
 // Gets the addresses of the deployed contracts.
-export function getContractAddresses(contracts: DeployedContracts): DeployedContractAddresses {
+export async function getContractAddresses(contracts: DeployedContracts): Promise<DeployedContractAddresses> {
 	return {
 		FuelSidechainConsensus: contracts.fuelSidechainConsensus.address,
 		FuelMessagePortal: contracts.fuelMessagePortal.address,
 		L1ERC20Gateway: contracts.l1ERC20Gateway.address,
+		FuelSidechainConsensus_impl: await upgrades.erc1967.getImplementationAddress(
+			contracts.fuelSidechainConsensus.address
+		),
+		FuelMessagePortal_impl: await upgrades.erc1967.getImplementationAddress(contracts.fuelMessagePortal.address),
+		L1ERC20Gateway_impl: await upgrades.erc1967.getImplementationAddress(contracts.l1ERC20Gateway.address),
 	};
 }
 
@@ -73,7 +93,7 @@ export async function setupFuel(): Promise<HarnessObject> {
 
 	// Return the Fuel harness object
 	return {
-		contractAddresses: getContractAddresses(contracts),
+		contractAddresses: await getContractAddresses(contracts),
 		fuelSidechain: contracts.fuelSidechainConsensus,
 		fuelMessagePortal: contracts.fuelMessagePortal,
 		l1ERC20Gateway: contracts.l1ERC20Gateway,
@@ -128,16 +148,24 @@ export async function upgradeFuel(
 ): Promise<DeployedContractAddresses> {
 	// Upgrade fuel sidechain contract
 	const FuelSidechainConsensus = await ethers.getContractFactory('FuelSidechainConsensus', signer);
+	await upgrades.forceImport(contracts.FuelSidechainConsensus, FuelSidechainConsensus, { kind: 'uups' });
 	await upgrades.upgradeProxy(contracts.FuelSidechainConsensus, FuelSidechainConsensus);
 
 	// Upgrade message portal contract
 	const FuelMessagePortal = await ethers.getContractFactory('FuelMessagePortal', signer);
+	await upgrades.forceImport(contracts.FuelMessagePortal, FuelMessagePortal, { kind: 'uups' });
 	await upgrades.upgradeProxy(contracts.FuelMessagePortal, FuelMessagePortal);
 
 	// Upgrade gateway contract for ERC20 bridging
 	const L1ERC20Gateway = await ethers.getContractFactory('L1ERC20Gateway', signer);
+	await upgrades.forceImport(contracts.L1ERC20Gateway, L1ERC20Gateway, { kind: 'uups' });
 	await upgrades.upgradeProxy(contracts.L1ERC20Gateway, L1ERC20Gateway);
 
 	// Return deployed contracts
+	contracts.FuelSidechainConsensus_impl = await upgrades.erc1967.getImplementationAddress(
+		contracts.FuelSidechainConsensus
+	);
+	contracts.FuelMessagePortal_impl = await upgrades.erc1967.getImplementationAddress(contracts.FuelMessagePortal);
+	contracts.L1ERC20Gateway_impl = await upgrades.erc1967.getImplementationAddress(contracts.L1ERC20Gateway);
 	return contracts;
 }

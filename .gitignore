@@ -3,7 +3,8 @@ node_modules
 .vscode
 .openzeppelin
 
-deployments.json
+# local deployments
+deployments/deployments.local.json
 
 coverage
 coverage.json
