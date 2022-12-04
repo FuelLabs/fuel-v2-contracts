@@ -41,6 +41,9 @@ const config: HardhatUserConfig = {
 		localhost: {
 			url: 'http://127.0.0.1:8545/',
 		},
+		custom: {
+			url: 'http://127.0.0.1:8545/',
+		},
 	},
 	etherscan: {
 		apiKey: ETHERSCAN_API_KEY,
@@ -48,13 +51,13 @@ const config: HardhatUserConfig = {
 };
 
 // Override network configuration with environment variables
-if (CONTRACTS_RPC_URL && CONTRACTS_DEPLOYER_KEY && config.networks && config.networks.localhost) {
-	config.networks.localhost = {
+if (CONTRACTS_RPC_URL && CONTRACTS_DEPLOYER_KEY && config.networks && config.networks.custom) {
+	config.networks.custom = {
 		accounts: [CONTRACTS_DEPLOYER_KEY],
 		url: CONTRACTS_RPC_URL,
 		live: true,
 	};
-	if (process.env.CONTRACTS_GAS_PRICE) config.networks.localhost.gasPrice = parseInt(process.env.CONTRACTS_GAS_PRICE);
+	if (process.env.CONTRACTS_GAS_PRICE) config.networks.custom.gasPrice = parseInt(process.env.CONTRACTS_GAS_PRICE);
 }
 
 export default config;
