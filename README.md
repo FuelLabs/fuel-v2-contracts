@@ -12,8 +12,8 @@ The Fuel Solidity smart contract architecture.
 
 - [Build From Source](#build-from-source)
 - [Scripts](#scripts)
-  - [Deploy](#deploy)
-  - [Upgrade](#upgrade)
+  - [Deploy All](#deploy-all)
+  - [Upgrade All](#upgrade-all)
   - [Deploy Implementations](#deploy-implementations)
   - [Verify Source](#verify-source)
   - [Verify Deployment](#verify-address)
@@ -52,7 +52,7 @@ There are several provided scripts to help with contract management. Before runn
 - CONTRACTS_DEPLOYER_KEY - Overrides the default script used network accounts when set
 - CONTRACTS_GAS_PRICE - Overrides the default script used network gas price when set
 
-### Deploy
+### Deploy All
 
 ```sh
 npm run script-deploy
@@ -60,7 +60,7 @@ npm run script-deploy
 
 Deploys ALL contracts including proxy contracts. This is most useful when running a local network that you wish to deploy the full contract set to for testing.
 
-### Upgrade
+### Upgrade All
 
 ```sh
 npm run script-upgrade
@@ -90,7 +90,7 @@ Verifies the contract source code on Etherscan and Sourcify. This is only possib
 npm run script-verify-address
 ```
 
-Verifies the given contract address source code on Etherscan and Sourcify. This is useful to test if a proposed upgrade implementation exactly matches the expected code currently in the repository or on a specific branch of the repository. It also publicly veries the source code of the given contract on Etherscan and Sourcify in the process.
+Verifies the given contract address source code on Etherscan and Sourcify. This is useful to test if a proposed upgrade implementation exactly matches the expected code currently in the repository or on a specific branch of the repository. It also publicly verifies the source code of the given contract on Etherscan and Sourcify in the process. Note that this script checks the bytecode at the address against the repository first before uploading to Etherscan so you would see an error in regards to that first before anything about publicly verifying.
 
 ## Contributing
 
