@@ -1,7 +1,4 @@
 import express, { Express } from 'express';
-import { config as dotEnvConfig } from 'dotenv';
-
-dotEnvConfig();
 
 // Script to serve the local deployment addresses
 

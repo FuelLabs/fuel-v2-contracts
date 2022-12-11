@@ -3,7 +3,6 @@ import '@nomiclabs/hardhat-waffle';
 import '@nomiclabs/hardhat-etherscan';
 import '@openzeppelin/hardhat-upgrades';
 import 'hardhat-typechain';
-import 'hardhat-deploy';
 import 'solidity-coverage';
 import 'hardhat-gas-reporter';
 import { config as dotEnvConfig } from 'dotenv';
