@@ -1,4 +1,3 @@
-import { computeAddress, SigningKey } from 'ethers/lib/utils';
 import { ethers } from 'hardhat';
 import { DeployedContractAddresses, DeployedContracts, deployFuel, getContractAddresses } from '../protocol/harness';
 import {
@@ -56,10 +55,7 @@ async function main() {
 
 			// Set the POA authority key if defined
 			if (AUTHORITY_KEY) {
-				const poaKey = AUTHORITY_KEY.indexOf('0x') == 0 ? AUTHORITY_KEY : '0x' + AUTHORITY_KEY;
-				const poaSigner = new SigningKey(poaKey);
-				const poaSignerAddress = computeAddress(poaSigner.privateKey);
-				contracts.fuelSidechainConsensus.setAuthorityKey(poaSignerAddress);
+				contracts.fuelSidechainConsensus.setAuthorityKey(AUTHORITY_KEY);
 			}
 		} catch (e) {
 			throw new Error(
