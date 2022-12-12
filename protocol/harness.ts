@@ -134,7 +134,6 @@ export async function deployFuel(poaSignerAddress?: string): Promise<DeployedCon
 
 	// Return deployed contracts
 	return {
-		//binaryMerkleTreeLib,
 		fuelSidechainConsensus,
 		fuelMessagePortal,
 		l1ERC20Gateway,
