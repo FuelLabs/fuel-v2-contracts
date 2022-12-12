@@ -1,5 +1,6 @@
+import { computeAddress, SigningKey } from 'ethers/lib/utils';
 import { ethers } from 'hardhat';
-import { DeployedContractAddresses, deployFuel, getContractAddresses } from '../protocol/harness';
+import { DeployedContractAddresses, DeployedContracts, deployFuel, getContractAddresses } from '../protocol/harness';
 import {
 	isNetworkVerifiable,
 	publishProxySourceVerification,
@@ -21,6 +22,7 @@ import {
 // You can then connect to localhost (ethers, metamask, etc.) and the Fuel system will be deployed there at the addresses given
 
 const QUICK_DEPLOY = !!process.env.QUICK_DEPLOY;
+const AUTHORITY_KEY = process.env.AUTHORITY_KEY;
 
 async function main() {
 	// Check that the node is up
@@ -45,10 +47,20 @@ async function main() {
 	}
 	if (confirm) {
 		// Setup Fuel
+		let contracts: DeployedContracts;
 		let deployments: DeployedContractAddresses;
 		try {
 			console.log('Deploying contracts...'); // eslint-disable-line no-console
-			deployments = await getContractAddresses(await deployFuel());
+			contracts = await deployFuel();
+			deployments = await getContractAddresses(contracts);
+
+			// Set the POA authority key if defined
+			if (AUTHORITY_KEY) {
+				const poaKey = AUTHORITY_KEY.indexOf('0x') == 0 ? AUTHORITY_KEY : '0x' + AUTHORITY_KEY;
+				const poaSigner = new SigningKey(poaKey);
+				const poaSignerAddress = computeAddress(poaSigner.privateKey);
+				contracts.fuelSidechainConsensus.setAuthorityKey(poaSignerAddress);
+			}
 		} catch (e) {
 			throw new Error(
 				`Failed to deploy contracts. Make sure all configuration is correct and the proper permissions are in place.`
@@ -66,7 +78,7 @@ async function main() {
 		await saveDeploymentsFile(deployments);
 
 		// Confirm source verification/publishing
-		if (await isNetworkVerifiable()) {
+		if (!QUICK_DEPLOY && (await isNetworkVerifiable())) {
 			console.log(''); // eslint-disable-line no-console
 			const confirmVerification = await confirmationPrompt(
 				`Do you want to publish contract source code for verification (Y/n)? `
