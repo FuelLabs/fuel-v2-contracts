@@ -50,13 +50,8 @@ async function main() {
 		let deployments: DeployedContractAddresses;
 		try {
 			console.log('Deploying contracts...'); // eslint-disable-line no-console
-			contracts = await deployFuel();
+			contracts = await deployFuel(AUTHORITY_KEY ? AUTHORITY_KEY : undefined);
 			deployments = await getContractAddresses(contracts);
-
-			// Set the POA authority key if defined
-			if (AUTHORITY_KEY) {
-				contracts.fuelSidechainConsensus.setAuthorityKey(AUTHORITY_KEY);
-			}
 		} catch (e) {
 			throw new Error(
 				`Failed to deploy contracts. Make sure all configuration is correct and the proper permissions are in place.`
