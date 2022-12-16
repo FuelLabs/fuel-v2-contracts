@@ -94,7 +94,7 @@ Verifies the given contract address source code on Etherscan and Sourcify. This 
 
 ## Contributing
 
-Code must past tests with 100% coverage as well as be formatted and linted.
+Code must pass tests with 100% coverage as well as be formatted and linted.
 
 ```sh
 npm run coverage
