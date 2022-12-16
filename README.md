@@ -11,12 +11,13 @@ The Fuel Solidity smart contract architecture.
 ## Table of contents
 
 - [Build From Source](#build-from-source)
+- [Deployed Contract Addresses](#deployed-contract-addresses)
 - [Scripts](#scripts)
   - [Deploy All](#deploy-all)
   - [Upgrade All](#upgrade-all)
   - [Deploy Implementations](#deploy-implementations)
   - [Verify Source](#verify-source)
-  - [Verify Deployment](#verify-address)
+  - [Verify Address](#verify-address)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -42,6 +43,15 @@ Build and run tests:
 npm run build
 npm test
 ```
+
+## Deployed Contract Addresses
+
+You can find the addresses of the currently deployed contracts in the deployment files:
+
+- Mainnet - TBD
+- Goerli - [deployments.goerli.json](./deployments/deployments.goerli.json)
+
+\*Note: the contracts may have source code different from the current master branch head. Refer to the code verification on Etherscan or Sourcify for a look at their verified source code.
 
 ## Scripts
 
