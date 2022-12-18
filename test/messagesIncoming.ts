@@ -312,7 +312,7 @@ describe('Incoming Messages', async () => {
 			expect(await env.fuelMessagePortal.hasRole(pauserRole, signer1)).to.equal(true);
 		});
 
-		it('Should be able to grant permission as pauser', async () => {
+		it('Should not be able to grant permission as pauser', async () => {
 			expect(await env.fuelMessagePortal.hasRole(defaultAdminRole, signer2)).to.equal(false);
 			expect(await env.fuelMessagePortal.hasRole(pauserRole, signer2)).to.equal(false);
 
@@ -934,7 +934,7 @@ describe('Incoming Messages', async () => {
 			expect(await env.fuelMessagePortal.paused()).to.be.equal(true);
 		});
 
-		it('Should not be able to unpause as only pauser', async () => {
+		it('Should not be able to unpause as pauser (and not admin)', async () => {
 			expect(await env.fuelMessagePortal.paused()).to.be.equal(true);
 
 			// Attempt unpause
