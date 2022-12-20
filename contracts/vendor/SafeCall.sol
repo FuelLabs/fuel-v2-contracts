@@ -18,9 +18,9 @@ library SafeCall {
         uint256 _gas = gasleft();
         assembly {
             _success := call(
-                _gas, // gas
-                _target, // recipient
-                _value, // ether value
+                _gas,
+                _target,
+                _value,
                 add(_calldata, 0x20), // inloc
                 mload(_calldata), // inlen
                 0, // outloc
