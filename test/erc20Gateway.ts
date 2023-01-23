@@ -1,13 +1,12 @@
 import chai from 'chai';
 import { solidity } from 'ethereum-waffle';
 import { ethers } from 'hardhat';
-import { BigNumber, BigNumber as BN } from 'ethers';
+import { BigNumber as BN } from 'ethers';
 import { Provider } from '@ethersproject/abstract-provider';
 import { constructTree, calcRoot, getProof } from '@fuel-ts/merkle';
 import { HarnessObject, setupFuel } from '../protocol/harness';
-import BlockHeader, { computeBlockId } from '../protocol/blockHeader';
-import { EMPTY } from '../protocol/constants';
-import { compactSign } from '../protocol/validators';
+import BlockHeader, { BlockHeaderLite, computeBlockId, generateBlockHeaderLite } from '../protocol/blockHeader';
+import { EMPTY, ZERO } from '../protocol/constants';
 import Message, { computeMessageId } from '../protocol/message';
 import { randomAddress, randomBytes32 } from '../protocol/utils';
 
@@ -25,6 +24,12 @@ declare class TreeNode {
     index: number;
 }
 
+// Merkle proof class
+declare class MerkleProof {
+    key: number;
+    proof: string[];
+}
+
 // Computes data for message
 function computeMessageData(fuelTokenId: string, tokenId: string, from: string, to: string, amount: number): string {
     return ethers.utils.solidityPack(
@@ -34,19 +39,23 @@ function computeMessageData(fuelTokenId: string, tokenId: string, from: string, 
 }
 
 // Create a simple block
-function createBlock(blockIds: string[], messageIds: string[]): BlockHeader {
-    const tai64Time = BigNumber.from(Math.floor(new Date().getTime() / 1000)).add('4611686018427387914');
+function createBlock(
+    prevRoot: string,
+    blockHeight: number,
+    timestamp?: string,
+    outputMessagesCount?: string,
+    outputMessagesRoot?: string
+): BlockHeader {
     const header: BlockHeader = {
-        prevRoot: calcRoot(blockIds),
-        height: blockIds.length.toString(),
-        timestamp: tai64Time.toHexString(),
+        prevRoot: prevRoot ? prevRoot : ZERO,
+        height: blockHeight.toString(),
+        timestamp: timestamp ? timestamp : '0',
         daHeight: '0',
         txCount: '0',
-        outputMessagesCount: messageIds.length.toString(),
+        outputMessagesCount: outputMessagesCount ? outputMessagesCount : '0',
         txRoot: EMPTY,
-        outputMessagesRoot: calcRoot(messageIds),
+        outputMessagesRoot: outputMessagesRoot ? outputMessagesRoot : ZERO,
     };
-
     return header;
 }
 
@@ -63,10 +72,15 @@ function getLeafIndexKey(nodes: TreeNode[], data: string): number {
 describe('ERC20 Gateway', async () => {
     let env: HarnessObject;
 
+    // Contract constants
+    const TIME_TO_FINALIZE = 10800;
+    const BLOCKS_PER_EPOCH = 10800;
+
     // Message data
     const fuelTokenTarget1 = randomBytes32();
     const fuelTokenTarget2 = randomBytes32();
     const messageIds: string[] = [];
+    let messageNodes: TreeNode[];
     let gatewayAddress: string;
     let tokenAddress: string;
 
@@ -83,7 +97,27 @@ describe('ERC20 Gateway', async () => {
     // Arrays of committed block headers and their IDs
     const blockHeaders: BlockHeader[] = [];
     const blockIds: string[] = [];
-    const blockSignatures: string[] = [];
+    let endOfEpochHeader: BlockHeader;
+    let endOfEpochHeaderLite: BlockHeaderLite;
+    let prevBlockNodes: TreeNode[];
+
+    // Helper function to setup test data
+    function generateProof(message: Message, prevBlockDistance = 1): [string, BlockHeader, MerkleProof, MerkleProof] {
+        const messageBlockIndex = BLOCKS_PER_EPOCH - 1 - prevBlockDistance;
+        const messageBlockHeader = blockHeaders[messageBlockIndex];
+        const messageBlockLeafIndexKey = getLeafIndexKey(prevBlockNodes, blockIds[messageBlockIndex]);
+        const blockInHistoryProof = {
+            key: messageBlockLeafIndexKey,
+            proof: getProof(prevBlockNodes, messageBlockLeafIndexKey),
+        };
+        const messageID = computeMessageId(message);
+        const messageLeafIndexKey = getLeafIndexKey(messageNodes, messageID);
+        const messageInBlockProof = {
+            key: messageLeafIndexKey,
+            proof: getProof(messageNodes, messageLeafIndexKey),
+        };
+        return [messageID, messageBlockHeader, blockInHistoryProof, messageInBlockProof];
+    }
 
     before(async () => {
         env = await setupFuel();
@@ -192,16 +226,33 @@ describe('ERC20 Gateway', async () => {
         messageIds.push(computeMessageId(messageBadL2Token));
         messageIds.push(computeMessageId(messageBadL1Token));
         messageIds.push(computeMessageId(messageBadSender));
+        messageNodes = constructTree(messageIds);
 
-        // create a block
-        const blockHeader = createBlock(blockIds, messageIds);
-        const blockId = computeBlockId(blockHeader);
-        const blockSignature = await compactSign(env.poaSigner, blockId);
+        // create blocks
+        const messageCount = messageIds.length.toString();
+        const messagesRoot = calcRoot(messageIds);
+        for (let i = 0; i < BLOCKS_PER_EPOCH - 1; i++) {
+            const blockHeader = createBlock('', i, '', messageCount, messagesRoot);
+            const blockId = computeBlockId(blockHeader);
 
-        // append block header and Id to arrays
-        blockHeaders.push(blockHeader);
-        blockIds.push(blockId);
-        blockSignatures.push(blockSignature);
+            // append block header and Id to arrays
+            blockHeaders.push(blockHeader);
+            blockIds.push(blockId);
+        }
+        const tai64Time = BN.from(Math.floor(new Date().getTime() / 1000)).add('4611686018427387914');
+        endOfEpochHeader = createBlock(
+            calcRoot(blockIds),
+            blockIds.length,
+            tai64Time.toHexString(),
+            messageCount,
+            messagesRoot
+        );
+        endOfEpochHeaderLite = generateBlockHeaderLite(endOfEpochHeader);
+        prevBlockNodes = constructTree(blockIds);
+
+        // finalize blocks in the consensus contract
+        await env.fuelChainConsensus.commit(computeBlockId(endOfEpochHeader), 0);
+        ethers.provider.send('evm_increaseTime', [TIME_TO_FINALIZE]);
 
         // set token approval for gateway
         await env.token.approve(env.fuelERC20Gateway.address, env.initialTokenAmount);
@@ -371,15 +422,6 @@ describe('ERC20 Gateway', async () => {
     });
 
     describe('Make both valid and invalid ERC20 withdrawals', async () => {
-        let messageNodes: TreeNode[];
-        let blockHeader: BlockHeader;
-        let poaSignature: string;
-        before(async () => {
-            messageNodes = constructTree(messageIds);
-            blockHeader = blockHeaders[0];
-            poaSignature = blockSignatures[0];
-        });
-
         it('Should not be able to directly call finalize', async () => {
             await expect(
                 env.fuelERC20Gateway.finalizeWithdrawal(env.addresses[2], tokenAddress, BN.from(100))
@@ -389,22 +431,18 @@ describe('ERC20 Gateway', async () => {
         it('Should be able to finalize valid withdrawal through portal', async () => {
             const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
             const recipientBalance = await env.token.balanceOf(env.addresses[2]);
-            const messageID = computeMessageId(messageWithdrawal1);
-            const leafIndexKey = getLeafIndexKey(messageNodes, messageID);
-            const messageInBlockProof = {
-                key: leafIndexKey,
-                proof: getProof(messageNodes, leafIndexKey),
-            };
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageWithdrawal1, 23);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(
+                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageWithdrawal1,
-                    blockHeader,
-                    messageInBlockProof,
-                    poaSignature
+                    endOfEpochHeaderLite,
+                    msgBlockHeader,
+                    blockInRoot,
+                    msgInBlock
                 )
             ).to.not.be.reverted;
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(true);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(true);
             expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(gatewayBalance.sub(100));
             expect(await env.token.balanceOf(env.addresses[2])).to.be.equal(recipientBalance.add(100));
         });
@@ -412,22 +450,18 @@ describe('ERC20 Gateway', async () => {
         it('Should be able to finalize valid withdrawal through portal again', async () => {
             const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
             const recipientBalance = await env.token.balanceOf(env.addresses[3]);
-            const messageID = computeMessageId(messageWithdrawal2);
-            const leafIndexKey = getLeafIndexKey(messageNodes, messageID);
-            const messageInBlockProof = {
-                key: leafIndexKey,
-                proof: getProof(messageNodes, leafIndexKey),
-            };
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageWithdrawal2, 73);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(
+                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageWithdrawal2,
-                    blockHeader,
-                    messageInBlockProof,
-                    poaSignature
+                    endOfEpochHeaderLite,
+                    msgBlockHeader,
+                    blockInRoot,
+                    msgInBlock
                 )
             ).to.not.be.reverted;
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(true);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(true);
             expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(gatewayBalance.sub(75));
             expect(await env.token.balanceOf(env.addresses[3])).to.be.equal(recipientBalance.add(75));
         });
@@ -435,22 +469,18 @@ describe('ERC20 Gateway', async () => {
         it('Should not be able to finalize withdrawal with more than deposited', async () => {
             const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
             const recipientBalance = await env.token.balanceOf(env.addresses[3]);
-            const messageID = computeMessageId(messageTooLarge);
-            const leafIndexKey = getLeafIndexKey(messageNodes, messageID);
-            const messageInBlockProof = {
-                key: leafIndexKey,
-                proof: getProof(messageNodes, leafIndexKey),
-            };
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageTooLarge, 38);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(
+                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageTooLarge,
-                    blockHeader,
-                    messageInBlockProof,
-                    poaSignature
+                    endOfEpochHeaderLite,
+                    msgBlockHeader,
+                    blockInRoot,
+                    msgInBlock
                 )
             ).to.be.revertedWith('Message relay failed');
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(gatewayBalance);
             expect(await env.token.balanceOf(env.addresses[3])).to.be.equal(recipientBalance);
         });
@@ -458,22 +488,18 @@ describe('ERC20 Gateway', async () => {
         it('Should not be able to finalize withdrawal of zero tokens', async () => {
             const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
             const recipientBalance = await env.token.balanceOf(env.addresses[3]);
-            const messageID = computeMessageId(messageTooSmall);
-            const leafIndexKey = getLeafIndexKey(messageNodes, messageID);
-            const messageInBlockProof = {
-                key: leafIndexKey,
-                proof: getProof(messageNodes, leafIndexKey),
-            };
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageTooSmall, 47);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(
+                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageTooSmall,
-                    blockHeader,
-                    messageInBlockProof,
-                    poaSignature
+                    endOfEpochHeaderLite,
+                    msgBlockHeader,
+                    blockInRoot,
+                    msgInBlock
                 )
             ).to.be.revertedWith('Message relay failed');
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(gatewayBalance);
             expect(await env.token.balanceOf(env.addresses[3])).to.be.equal(recipientBalance);
         });
@@ -481,22 +507,18 @@ describe('ERC20 Gateway', async () => {
         it('Should not be able to finalize withdrawal with bad L2 token', async () => {
             const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
             const recipientBalance = await env.token.balanceOf(env.addresses[3]);
-            const messageID = computeMessageId(messageBadL2Token);
-            const leafIndexKey = getLeafIndexKey(messageNodes, messageID);
-            const messageInBlockProof = {
-                key: leafIndexKey,
-                proof: getProof(messageNodes, leafIndexKey),
-            };
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageBadL2Token, 85);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(
+                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageBadL2Token,
-                    blockHeader,
-                    messageInBlockProof,
-                    poaSignature
+                    endOfEpochHeaderLite,
+                    msgBlockHeader,
+                    blockInRoot,
+                    msgInBlock
                 )
             ).to.be.revertedWith('Message relay failed');
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(gatewayBalance);
             expect(await env.token.balanceOf(env.addresses[3])).to.be.equal(recipientBalance);
         });
@@ -504,22 +526,18 @@ describe('ERC20 Gateway', async () => {
         it('Should not be able to finalize withdrawal with bad L1 token', async () => {
             const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
             const recipientBalance = await env.token.balanceOf(env.addresses[3]);
-            const messageID = computeMessageId(messageBadL1Token);
-            const leafIndexKey = getLeafIndexKey(messageNodes, messageID);
-            const messageInBlockProof = {
-                key: leafIndexKey,
-                proof: getProof(messageNodes, leafIndexKey),
-            };
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageBadL1Token, 19);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(
+                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageBadL1Token,
-                    blockHeader,
-                    messageInBlockProof,
-                    poaSignature
+                    endOfEpochHeaderLite,
+                    msgBlockHeader,
+                    blockInRoot,
+                    msgInBlock
                 )
             ).to.be.revertedWith('Message relay failed');
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(gatewayBalance);
             expect(await env.token.balanceOf(env.addresses[3])).to.be.equal(recipientBalance);
         });
@@ -527,22 +545,18 @@ describe('ERC20 Gateway', async () => {
         it('Should not be able to finalize withdrawal with bad sender', async () => {
             const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
             const recipientBalance = await env.token.balanceOf(env.addresses[3]);
-            const messageID = computeMessageId(messageBadSender);
-            const leafIndexKey = getLeafIndexKey(messageNodes, messageID);
-            const messageInBlockProof = {
-                key: leafIndexKey,
-                proof: getProof(messageNodes, leafIndexKey),
-            };
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageBadSender, 26);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(
+                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageBadSender,
-                    blockHeader,
-                    messageInBlockProof,
-                    poaSignature
+                    endOfEpochHeaderLite,
+                    msgBlockHeader,
+                    blockInRoot,
+                    msgInBlock
                 )
             ).to.be.revertedWith('Message relay failed');
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(gatewayBalance);
             expect(await env.token.balanceOf(env.addresses[3])).to.be.equal(recipientBalance);
         });
@@ -551,14 +565,6 @@ describe('ERC20 Gateway', async () => {
     describe('Verify pause and unpause', async () => {
         const defaultAdminRole = '0x0000000000000000000000000000000000000000000000000000000000000000';
         const pauserRole = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('PAUSER_ROLE'));
-        let messageNodes: TreeNode[];
-        let blockHeader: BlockHeader;
-        let poaSignature: string;
-        before(async () => {
-            messageNodes = constructTree(messageIds);
-            blockHeader = blockHeaders[0];
-            poaSignature = blockSignatures[0];
-        });
 
         it('Should be able to grant pauser role', async () => {
             expect(await env.fuelERC20Gateway.hasRole(pauserRole, env.addresses[2])).to.equal(false);
@@ -607,22 +613,18 @@ describe('ERC20 Gateway', async () => {
         });
 
         it('Should not be able to finalize withdrawal when paused', async () => {
-            const messageID = computeMessageId(messageWithdrawal3);
-            const leafIndexKey = getLeafIndexKey(messageNodes, messageID);
-            const messageInBlockProof = {
-                key: leafIndexKey,
-                proof: getProof(messageNodes, leafIndexKey),
-            };
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageWithdrawal3, 31);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(
+                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageWithdrawal3,
-                    blockHeader,
-                    messageInBlockProof,
-                    poaSignature
+                    endOfEpochHeaderLite,
+                    msgBlockHeader,
+                    blockInRoot,
+                    msgInBlock
                 )
             ).to.be.revertedWith('Message relay failed');
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
         });
 
         it('Should not be able to deposit when paused', async () => {
@@ -646,22 +648,18 @@ describe('ERC20 Gateway', async () => {
         it('Should be able to finalize withdrawal when unpaused', async () => {
             const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
             const recipientBalance = await env.token.balanceOf(env.addresses[3]);
-            const messageID = computeMessageId(messageWithdrawal3);
-            const leafIndexKey = getLeafIndexKey(messageNodes, messageID);
-            const messageInBlockProof = {
-                key: leafIndexKey,
-                proof: getProof(messageNodes, leafIndexKey),
-            };
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(false);
+            const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageWithdrawal3, 37);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(
+                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageWithdrawal3,
-                    blockHeader,
-                    messageInBlockProof,
-                    poaSignature
+                    endOfEpochHeaderLite,
+                    msgBlockHeader,
+                    blockInRoot,
+                    msgInBlock
                 )
             ).to.not.be.reverted;
-            expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageID)).to.be.equal(true);
+            expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(true);
             expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(gatewayBalance.sub(250));
             expect(await env.token.balanceOf(env.addresses[3])).to.be.equal(recipientBalance.add(250));
         });

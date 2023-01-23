@@ -35,7 +35,7 @@ abstract contract FuelMessagesEnabled {
     // Public Functions //
     //////////////////////
 
-    /// @notice Gets the currently set PoA key
+    /// @notice Gets the currently set message portal address
     /// @return fuelMessagePortal Fuel message portal address
     function fuelMessagePortal() public view returns (address) {
         return address(_fuelMessagePortal);
