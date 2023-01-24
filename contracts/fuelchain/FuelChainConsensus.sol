@@ -36,7 +36,7 @@ contract FuelChainConsensus is Initializable, PausableUpgradeable, AccessControl
     // Events //
     ////////////
 
-    event CommitSubmitted(uint256 indexed epochNum, bytes32 blockHash);
+    event CommitSubmitted(uint256 indexed epoch, bytes32 blockHash);
 
     /////////////
     // Storage //
@@ -83,14 +83,14 @@ contract FuelChainConsensus is Initializable, PausableUpgradeable, AccessControl
 
     /// @notice Commits a block header.
     /// @param blockHash The hash of a block
-    /// @param epochNum The epoch number of the commit
-    function commit(bytes32 blockHash, uint256 epochNum) external whenNotPaused onlyRole(COMMITTER_ROLE) {
-        uint256 slot = epochNum % NUM_COMMIT_SLOTS;
+    /// @param epoch The epoch number of the commit
+    function commit(bytes32 blockHash, uint256 epoch) external whenNotPaused onlyRole(COMMITTER_ROLE) {
+        uint256 slot = epoch % NUM_COMMIT_SLOTS;
         Commit storage commitSlot = _commitSlots[slot];
         commitSlot.blockHash = blockHash;
         commitSlot.timestamp = uint32(block.timestamp);
 
-        emit CommitSubmitted(epochNum, blockHash);
+        emit CommitSubmitted(epoch, blockHash);
     }
 
     //////////////////////
@@ -102,11 +102,19 @@ contract FuelChainConsensus is Initializable, PausableUpgradeable, AccessControl
     /// @param blockHeight The height of the block to check
     /// @return true if the block is finalized
     function finalized(bytes32 blockHash, uint256 blockHeight) external view whenNotPaused returns (bool) {
-        uint256 epochNum = blockHeight / BLOCKS_PER_EPOCH;
-        Commit storage commitSlot = _commitSlots[epochNum % NUM_COMMIT_SLOTS];
+        uint256 epoch = blockHeight / BLOCKS_PER_EPOCH;
+        Commit storage commitSlot = _commitSlots[epoch % NUM_COMMIT_SLOTS];
         require(commitSlot.blockHash == blockHash, "Unknown block");
 
-        return uint256(block.timestamp) >= uint256(commitSlot.timestamp) + TIME_TO_FINALIZE;
+        return block.timestamp >= uint256(commitSlot.timestamp) + TIME_TO_FINALIZE;
+    }
+
+    /// @notice Gets the block hash at the given epoch
+    /// @param epoch The epoch number of the commit
+    /// @return hash of the block at the given epoch
+    function blockHashAtEpoch(uint256 epoch) external view returns (bytes32) {
+        Commit storage commitSlot = _commitSlots[epoch % NUM_COMMIT_SLOTS];
+        return commitSlot.blockHash;
     }
 
     ////////////////////////

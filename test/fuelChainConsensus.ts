@@ -176,13 +176,17 @@ describe('Fuel Chain Consensus', async () => {
         });
 
         it('Should not be able to make commits as non-comitter', async () => {
+            const blockHash = await env.fuelChainConsensus.blockHashAtEpoch(9);
             await expect(env.fuelChainConsensus.connect(env.signers[2]).commit(randomBytes32(), 9)).to.be.revertedWith(
                 `AccessControl: account ${env.addresses[2].toLowerCase()} is missing role ${committerRole}`
             );
+            expect(await env.fuelChainConsensus.blockHashAtEpoch(9)).to.equal(blockHash);
         });
 
         it('Should be able to make commits as comitter', async () => {
-            await expect(env.fuelChainConsensus.connect(env.signers[1]).commit(randomBytes32(), 9)).to.not.be.reverted;
+            const blockHash = randomBytes32();
+            await expect(env.fuelChainConsensus.connect(env.signers[1]).commit(blockHash, 9)).to.not.be.reverted;
+            expect(await env.fuelChainConsensus.blockHashAtEpoch(9)).to.equal(blockHash);
         });
     });
 
