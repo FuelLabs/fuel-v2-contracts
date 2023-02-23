@@ -8,7 +8,7 @@ import { HarnessObject, setupFuel } from '../protocol/harness';
 import BlockHeader, { BlockHeaderLite, computeBlockId, generateBlockHeaderLite } from '../protocol/blockHeader';
 import { EMPTY, ZERO } from '../protocol/constants';
 import Message, { computeMessageId } from '../protocol/message';
-import { randomAddress, randomBytes32 } from '../protocol/utils';
+import { randomAddress, randomBytes32, tai64Time } from '../protocol/utils';
 
 chai.use(solidity);
 const { expect } = chai;
@@ -239,11 +239,10 @@ describe('ERC20 Gateway', async () => {
             blockHeaders.push(blockHeader);
             blockIds.push(blockId);
         }
-        const tai64Time = BN.from(Math.floor(new Date().getTime() / 1000)).add('4611686018427387914');
         endOfEpochHeader = createBlock(
             calcRoot(blockIds),
             blockIds.length,
-            tai64Time.toHexString(),
+            tai64Time(new Date().getTime()),
             messageCount,
             messagesRoot
         );

@@ -5,18 +5,17 @@ import BlockHeader, { computeBlockId } from '../protocol/blockHeader';
 import { EMPTY } from '../protocol/constants';
 import { BigNumber } from 'ethers';
 import { ethers } from 'hardhat';
-import { randomBytes32 } from '../protocol/utils';
+import { randomBytes32, tai64Time } from '../protocol/utils';
 
 chai.use(solidity);
 const { expect } = chai;
 
 // Create a simple block
 function createBlock(height: number): BlockHeader {
-    const tai64Time = BigNumber.from(Math.floor(new Date().getTime() / 1000)).add('4611686018427387914');
     const header: BlockHeader = {
         prevRoot: EMPTY,
         height: BigNumber.from(height).toHexString(),
-        timestamp: tai64Time.toHexString(),
+        timestamp: tai64Time(new Date().getTime()),
         daHeight: '0',
         txCount: '0',
         outputMessagesCount: '0',

@@ -9,7 +9,7 @@ import { HarnessObject, setupFuel } from '../protocol/harness';
 import BlockHeader, { BlockHeaderLite, computeBlockId, generateBlockHeaderLite } from '../protocol/blockHeader';
 import { EMPTY, ZERO } from '../protocol/constants';
 import Message, { computeMessageId } from '../protocol/message';
-import { randomBytes32 } from '../protocol/utils';
+import { randomBytes32, tai64Time } from '../protocol/utils';
 
 chai.use(solidity);
 const { expect } = chai;
@@ -119,7 +119,7 @@ describe('Incoming Messages', async () => {
         };
         return [messageID, messageBlockHeader, blockInHistoryProof, messageInBlockProof];
     }
-    function generateProof2(message: Message): [string, MerkleProof] {
+    function generateJustMessageProof(message: Message): [string, MerkleProof] {
         const messageID = computeMessageId(message);
         const messageLeafIndexKey = getLeafIndexKey(messageNodes, messageID);
         const messageInBlockProof = {
@@ -235,14 +235,8 @@ describe('Incoming Messages', async () => {
         }
 
         // create end of epoch block
-        const tai64Time = BN.from(Math.floor(new Date().getTime() / 1000)).add('4611686018427387914');
-        endOfEpochHeader = createBlock(
-            calcRoot(blockIds),
-            blockIds.length,
-            tai64Time.toHexString(),
-            messageCount,
-            messagesRoot
-        );
+        const timestamp = tai64Time(new Date().getTime());
+        endOfEpochHeader = createBlock(calcRoot(blockIds), blockIds.length, timestamp, messageCount, messagesRoot);
         endOfEpochHeaderLite = generateBlockHeaderLite(endOfEpochHeader);
         prevBlockNodes = constructTree(blockIds);
         blockIds.push(computeBlockId(endOfEpochHeader));
@@ -255,7 +249,7 @@ describe('Incoming Messages', async () => {
         unflinalizedBlock = createBlock(
             calcRoot(blockIds),
             BLOCKS_PER_EPOCH * 11 - 1,
-            tai64Time.toHexString(),
+            timestamp,
             messageCount,
             messagesRoot
         );
@@ -378,7 +372,7 @@ describe('Incoming Messages', async () => {
         });
 
         it('Should not be able to relay message with bad block', async () => {
-            const [msgID, msgInBlock] = generateProof2(message1);
+            const [msgID, msgInBlock] = generateJustMessageProof(message1);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
                 env.fuelMessagePortal.relayMessageFromFuelBlock(
@@ -784,7 +778,7 @@ describe('Incoming Messages', async () => {
         });
 
         it('Should be able to relay message when unpaused', async () => {
-            const [msgID, msgInBlock] = generateProof2(message2);
+            const [msgID, msgInBlock] = generateJustMessageProof(message2);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(env.fuelMessagePortal.relayMessageFromFuelBlock(message2, endOfEpochHeader, msgInBlock)).to.not
                 .be.reverted;
