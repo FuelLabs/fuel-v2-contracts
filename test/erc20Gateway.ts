@@ -8,7 +8,7 @@ import { HarnessObject, setupFuel } from '../protocol/harness';
 import BlockHeader, { BlockHeaderLite, computeBlockId, generateBlockHeaderLite } from '../protocol/blockHeader';
 import { EMPTY, ZERO } from '../protocol/constants';
 import Message, { computeMessageId } from '../protocol/message';
-import { randomAddress, randomBytes32 } from '../protocol/utils';
+import { randomAddress, randomBytes32, tai64Time } from '../protocol/utils';
 
 chai.use(solidity);
 const { expect } = chai;
@@ -74,7 +74,7 @@ describe('ERC20 Gateway', async () => {
 
     // Contract constants
     const TIME_TO_FINALIZE = 10800;
-    const BLOCKS_PER_EPOCH = 10800;
+    const BLOCKS_PER_COMMIT_INTERVAL = 10800;
 
     // Message data
     const fuelTokenTarget1 = randomBytes32();
@@ -97,13 +97,13 @@ describe('ERC20 Gateway', async () => {
     // Arrays of committed block headers and their IDs
     const blockHeaders: BlockHeader[] = [];
     const blockIds: string[] = [];
-    let endOfEpochHeader: BlockHeader;
-    let endOfEpochHeaderLite: BlockHeaderLite;
+    let endOfCommitIntervalHeader: BlockHeader;
+    let endOfCommitIntervalHeaderLite: BlockHeaderLite;
     let prevBlockNodes: TreeNode[];
 
     // Helper function to setup test data
     function generateProof(message: Message, prevBlockDistance = 1): [string, BlockHeader, MerkleProof, MerkleProof] {
-        const messageBlockIndex = BLOCKS_PER_EPOCH - 1 - prevBlockDistance;
+        const messageBlockIndex = BLOCKS_PER_COMMIT_INTERVAL - 1 - prevBlockDistance;
         const messageBlockHeader = blockHeaders[messageBlockIndex];
         const messageBlockLeafIndexKey = getLeafIndexKey(prevBlockNodes, blockIds[messageBlockIndex]);
         const blockInHistoryProof = {
@@ -231,7 +231,7 @@ describe('ERC20 Gateway', async () => {
         // create blocks
         const messageCount = messageIds.length.toString();
         const messagesRoot = calcRoot(messageIds);
-        for (let i = 0; i < BLOCKS_PER_EPOCH - 1; i++) {
+        for (let i = 0; i < BLOCKS_PER_COMMIT_INTERVAL - 1; i++) {
             const blockHeader = createBlock('', i, '', messageCount, messagesRoot);
             const blockId = computeBlockId(blockHeader);
 
@@ -239,19 +239,18 @@ describe('ERC20 Gateway', async () => {
             blockHeaders.push(blockHeader);
             blockIds.push(blockId);
         }
-        const tai64Time = BN.from(Math.floor(new Date().getTime() / 1000)).add('4611686018427387914');
-        endOfEpochHeader = createBlock(
+        endOfCommitIntervalHeader = createBlock(
             calcRoot(blockIds),
             blockIds.length,
-            tai64Time.toHexString(),
+            tai64Time(new Date().getTime()),
             messageCount,
             messagesRoot
         );
-        endOfEpochHeaderLite = generateBlockHeaderLite(endOfEpochHeader);
+        endOfCommitIntervalHeaderLite = generateBlockHeaderLite(endOfCommitIntervalHeader);
         prevBlockNodes = constructTree(blockIds);
 
         // finalize blocks in the consensus contract
-        await env.fuelChainConsensus.commit(computeBlockId(endOfEpochHeader), 0);
+        await env.fuelChainConsensus.commit(computeBlockId(endOfCommitIntervalHeader), 0);
         ethers.provider.send('evm_increaseTime', [TIME_TO_FINALIZE]);
 
         // set token approval for gateway
@@ -436,7 +435,7 @@ describe('ERC20 Gateway', async () => {
             await expect(
                 env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageWithdrawal1,
-                    endOfEpochHeaderLite,
+                    endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
                     blockInRoot,
                     msgInBlock
@@ -455,7 +454,7 @@ describe('ERC20 Gateway', async () => {
             await expect(
                 env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageWithdrawal2,
-                    endOfEpochHeaderLite,
+                    endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
                     blockInRoot,
                     msgInBlock
@@ -474,7 +473,7 @@ describe('ERC20 Gateway', async () => {
             await expect(
                 env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageTooLarge,
-                    endOfEpochHeaderLite,
+                    endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
                     blockInRoot,
                     msgInBlock
@@ -493,7 +492,7 @@ describe('ERC20 Gateway', async () => {
             await expect(
                 env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageTooSmall,
-                    endOfEpochHeaderLite,
+                    endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
                     blockInRoot,
                     msgInBlock
@@ -512,7 +511,7 @@ describe('ERC20 Gateway', async () => {
             await expect(
                 env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageBadL2Token,
-                    endOfEpochHeaderLite,
+                    endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
                     blockInRoot,
                     msgInBlock
@@ -531,7 +530,7 @@ describe('ERC20 Gateway', async () => {
             await expect(
                 env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageBadL1Token,
-                    endOfEpochHeaderLite,
+                    endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
                     blockInRoot,
                     msgInBlock
@@ -550,7 +549,7 @@ describe('ERC20 Gateway', async () => {
             await expect(
                 env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageBadSender,
-                    endOfEpochHeaderLite,
+                    endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
                     blockInRoot,
                     msgInBlock
@@ -618,7 +617,7 @@ describe('ERC20 Gateway', async () => {
             await expect(
                 env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageWithdrawal3,
-                    endOfEpochHeaderLite,
+                    endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
                     blockInRoot,
                     msgInBlock
@@ -653,7 +652,7 @@ describe('ERC20 Gateway', async () => {
             await expect(
                 env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
                     messageWithdrawal3,
-                    endOfEpochHeaderLite,
+                    endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
                     blockInRoot,
                     msgInBlock
