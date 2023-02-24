@@ -8,7 +8,7 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import {CryptographyLib} from "../lib/Cryptography.sol";
 
-/// @notice Structure for epoch commits
+/// @notice Structure for commits
 struct Commit {
     bytes32 blockHash;
     uint32 timestamp;
@@ -23,9 +23,9 @@ contract FuelChainConsensus is Initializable, PausableUpgradeable, AccessControl
     ///////////////
 
     /// @dev The commit proccess parameters
-    //TODO: update these values once block time and epoch size are finalized
+    //TODO: update these values once block time and commit frequency are finalized
     uint256 public constant NUM_COMMIT_SLOTS = 240; //30 days worth of commits
-    uint256 public constant BLOCKS_PER_EPOCH = 10800;
+    uint256 public constant BLOCKS_PER_COMMIT_INTERVAL = 10800;
     uint256 public constant TIME_TO_FINALIZE = 10800;
 
     /// @dev The admin related contract roles
@@ -36,7 +36,7 @@ contract FuelChainConsensus is Initializable, PausableUpgradeable, AccessControl
     // Events //
     ////////////
 
-    event CommitSubmitted(uint256 indexed epoch, bytes32 blockHash);
+    event CommitSubmitted(uint256 indexed commitHeight, bytes32 blockHash);
 
     /////////////
     // Storage //
@@ -83,14 +83,14 @@ contract FuelChainConsensus is Initializable, PausableUpgradeable, AccessControl
 
     /// @notice Commits a block header.
     /// @param blockHash The hash of a block
-    /// @param epoch The epoch number of the commit
-    function commit(bytes32 blockHash, uint256 epoch) external whenNotPaused onlyRole(COMMITTER_ROLE) {
-        uint256 slot = epoch % NUM_COMMIT_SLOTS;
+    /// @param commitHeight The height of the commit
+    function commit(bytes32 blockHash, uint256 commitHeight) external whenNotPaused onlyRole(COMMITTER_ROLE) {
+        uint256 slot = commitHeight % NUM_COMMIT_SLOTS;
         Commit storage commitSlot = _commitSlots[slot];
         commitSlot.blockHash = blockHash;
         commitSlot.timestamp = uint32(block.timestamp);
 
-        emit CommitSubmitted(epoch, blockHash);
+        emit CommitSubmitted(commitHeight, blockHash);
     }
 
     //////////////////////
@@ -102,18 +102,18 @@ contract FuelChainConsensus is Initializable, PausableUpgradeable, AccessControl
     /// @param blockHeight The height of the block to check
     /// @return true if the block is finalized
     function finalized(bytes32 blockHash, uint256 blockHeight) external view whenNotPaused returns (bool) {
-        uint256 epoch = blockHeight / BLOCKS_PER_EPOCH;
-        Commit storage commitSlot = _commitSlots[epoch % NUM_COMMIT_SLOTS];
+        uint256 commitHeight = blockHeight / BLOCKS_PER_COMMIT_INTERVAL;
+        Commit storage commitSlot = _commitSlots[commitHeight % NUM_COMMIT_SLOTS];
         require(commitSlot.blockHash == blockHash, "Unknown block");
 
         return block.timestamp >= uint256(commitSlot.timestamp) + TIME_TO_FINALIZE;
     }
 
-    /// @notice Gets the block hash at the given epoch
-    /// @param epoch The epoch number of the commit
-    /// @return hash of the block at the given epoch
-    function blockHashAtEpoch(uint256 epoch) external view returns (bytes32) {
-        Commit storage commitSlot = _commitSlots[epoch % NUM_COMMIT_SLOTS];
+    /// @notice Gets the block hash at the given commit height
+    /// @param commitHeight The height of the commit
+    /// @return hash of the block at the given commit height
+    function blockHashAtCommit(uint256 commitHeight) external view returns (bytes32) {
+        Commit storage commitSlot = _commitSlots[commitHeight % NUM_COMMIT_SLOTS];
         return commitSlot.blockHash;
     }
 

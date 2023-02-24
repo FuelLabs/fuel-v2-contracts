@@ -31,7 +31,7 @@ describe('Fuel Chain Consensus', async () => {
 
     // Contract constants
     const TIME_TO_FINALIZE = 10800;
-    const BLOCKS_PER_EPOCH = 10800;
+    const BLOCKS_PER_COMMIT_INTERVAL = 10800;
 
     // Committed block headers
     let blockHeader: BlockHeader;
@@ -49,7 +49,7 @@ describe('Fuel Chain Consensus', async () => {
         ethers.provider.send('evm_increaseTime', [TIME_TO_FINALIZE]);
 
         // Create an unfinalized block
-        blockHeaderUnfinalized = createBlock(BLOCKS_PER_EPOCH);
+        blockHeaderUnfinalized = createBlock(BLOCKS_PER_COMMIT_INTERVAL);
         blockIdUnfinalized = computeBlockId(blockHeaderUnfinalized);
         await env.fuelChainConsensus.commit(blockIdUnfinalized, 1);
     });
@@ -175,17 +175,17 @@ describe('Fuel Chain Consensus', async () => {
         });
 
         it('Should not be able to make commits as non-comitter', async () => {
-            const blockHash = await env.fuelChainConsensus.blockHashAtEpoch(9);
+            const blockHash = await env.fuelChainConsensus.blockHashAtCommit(9);
             await expect(env.fuelChainConsensus.connect(env.signers[2]).commit(randomBytes32(), 9)).to.be.revertedWith(
                 `AccessControl: account ${env.addresses[2].toLowerCase()} is missing role ${committerRole}`
             );
-            expect(await env.fuelChainConsensus.blockHashAtEpoch(9)).to.equal(blockHash);
+            expect(await env.fuelChainConsensus.blockHashAtCommit(9)).to.equal(blockHash);
         });
 
         it('Should be able to make commits as comitter', async () => {
             const blockHash = randomBytes32();
             await expect(env.fuelChainConsensus.connect(env.signers[1]).commit(blockHash, 9)).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.blockHashAtEpoch(9)).to.equal(blockHash);
+            expect(await env.fuelChainConsensus.blockHashAtCommit(9)).to.equal(blockHash);
         });
     });
 
@@ -195,7 +195,9 @@ describe('Fuel Chain Consensus', async () => {
         });
 
         it('Should not be able to verify unfinalized block', async () => {
-            expect(await env.fuelChainConsensus.finalized(blockIdUnfinalized, BLOCKS_PER_EPOCH)).to.be.equal(false);
+            expect(await env.fuelChainConsensus.finalized(blockIdUnfinalized, BLOCKS_PER_COMMIT_INTERVAL)).to.be.equal(
+                false
+            );
         });
 
         it('Should not be able to verify invalid block', async () => {
