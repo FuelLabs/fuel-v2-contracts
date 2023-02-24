@@ -69,9 +69,6 @@ contract FuelMessagePortal is
     /// @notice The Fuel chain consensus contract
     FuelChainConsensus private _fuelChainConsensus;
 
-    /// @notice The waiting period for message root states (in milliseconds)
-    uint64 private _incomingMessageTimelock;
-
     /// @notice Nonce for the next message to be sent
     uint64 private _outgoingMessageNonce;
 
@@ -108,7 +105,6 @@ contract FuelMessagePortal is
 
         //incoming message data
         _incomingMessageSender = NULL_MESSAGE_SENDER;
-        _incomingMessageTimelock = 0;
     }
 
     /////////////////////
@@ -123,12 +119,6 @@ contract FuelMessagePortal is
     /// @notice Unpause outbound messages
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
-    }
-
-    /// @notice Sets the waiting period for message root states
-    /// @param messageTimelock The waiting period for message root states (in milliseconds)
-    function setIncomingMessageTimelock(uint64 messageTimelock) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _incomingMessageTimelock = messageTimelock;
     }
 
     //////////////////////
@@ -155,18 +145,16 @@ contract FuelMessagePortal is
     /// @param message The message to relay
     /// @param blockHeader The block containing the message
     /// @param messageInBlockProof Proof that message exists in block
-    /// @param poaSignature Authority signature proving block validity
     /// @dev Made payable to reduce gas costs
     function relayMessageFromFuelBlock(
         Message calldata message,
         FuelBlockHeader calldata blockHeader,
-        MerkleProof calldata messageInBlockProof,
-        bytes calldata poaSignature
+        MerkleProof calldata messageInBlockProof
     ) external payable whenNotPaused {
         //verify block header
         require(
-            _fuelChainConsensus.verifyBlock(blockHeader.computeConsensusHeaderHash(), poaSignature),
-            "Invalid block"
+            _fuelChainConsensus.finalized(blockHeader.computeConsensusHeaderHash(), blockHeader.height),
+            "Unfinalized block"
         );
 
         //execute message
@@ -179,20 +167,18 @@ contract FuelMessagePortal is
     /// @param blockHeader The block containing the message
     /// @param blockInHistoryProof Proof that the message block exists in the history of the root block
     /// @param messageInBlockProof Proof that message exists in block
-    /// @param poaSignature Authority signature proving block validity
     /// @dev Made payable to reduce gas costs
     function relayMessageFromPrevFuelBlock(
         Message calldata message,
         FuelBlockHeaderLite calldata rootBlockHeader,
         FuelBlockHeader calldata blockHeader,
         MerkleProof calldata blockInHistoryProof,
-        MerkleProof calldata messageInBlockProof,
-        bytes calldata poaSignature
+        MerkleProof calldata messageInBlockProof
     ) external payable whenNotPaused {
         //verify root block header
         require(
-            _fuelChainConsensus.verifyBlock(rootBlockHeader.computeConsensusHeaderHash(), poaSignature),
-            "Invalid root block"
+            _fuelChainConsensus.finalized(rootBlockHeader.computeConsensusHeaderHash(), rootBlockHeader.height),
+            "Unfinalized block"
         );
 
         //verify block in history
@@ -202,19 +188,13 @@ contract FuelMessagePortal is
                 abi.encodePacked(blockHeader.computeConsensusHeaderHash()),
                 blockInHistoryProof.proof,
                 blockInHistoryProof.key,
-                rootBlockHeader.height - 1
+                rootBlockHeader.height
             ),
             "Invalid block in history proof"
         );
 
         //execute message
         _executeMessageInHeader(message, blockHeader, messageInBlockProof);
-    }
-
-    /// @notice Gets the currently set timelock for all incoming messages (in milliseconds)
-    /// @return incoming message timelock
-    function incomingMessageTimelock() public view returns (uint64) {
-        return _incomingMessageTimelock;
     }
 
     /// @notice Gets if the given message ID has been relayed successfully
@@ -291,12 +271,6 @@ contract FuelMessagePortal is
             abi.encodePacked(message.sender, message.recipient, message.nonce, message.amount, message.data)
         );
         require(!_incomingMessageSuccessful[messageId], "Already relayed");
-        require(
-            (blockHeader.timestamp - 4611686018427387914) <=
-                // solhint-disable-next-line not-rely-on-time
-                (block.timestamp - _incomingMessageTimelock),
-            "Timelock not elapsed"
-        );
 
         //verify message in block
         require(

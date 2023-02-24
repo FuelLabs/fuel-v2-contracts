@@ -3,24 +3,22 @@ import { solidity } from 'ethereum-waffle';
 import { HarnessObject, setupFuel } from '../protocol/harness';
 import BlockHeader, { computeBlockId } from '../protocol/blockHeader';
 import { EMPTY } from '../protocol/constants';
-import { compactSign } from '../protocol/validators';
-import { SigningKey } from 'ethers/lib/utils';
 import { BigNumber } from 'ethers';
 import { ethers } from 'hardhat';
+import { randomBytes32, tai64Time } from '../protocol/utils';
 
 chai.use(solidity);
 const { expect } = chai;
 
 // Create a simple block
-function createBlock(blockIds: string[], messageIds: string[]): BlockHeader {
-    const tai64Time = BigNumber.from(Math.floor(new Date().getTime() / 1000)).add('4611686018427387914');
+function createBlock(height: number): BlockHeader {
     const header: BlockHeader = {
         prevRoot: EMPTY,
-        height: blockIds.length.toString(),
-        timestamp: tai64Time.toHexString(),
+        height: BigNumber.from(height).toHexString(),
+        timestamp: tai64Time(new Date().getTime()),
         daHeight: '0',
         txCount: '0',
-        outputMessagesCount: messageIds.length.toString(),
+        outputMessagesCount: '0',
         txRoot: EMPTY,
         outputMessagesRoot: EMPTY,
     };
@@ -31,18 +29,29 @@ function createBlock(blockIds: string[], messageIds: string[]): BlockHeader {
 describe('Fuel Chain Consensus', async () => {
     let env: HarnessObject;
 
-    // Arrays of committed block headers and their IDs
+    // Contract constants
+    const TIME_TO_FINALIZE = 10800;
+    const BLOCKS_PER_COMMIT_INTERVAL = 10800;
+
+    // Committed block headers
     let blockHeader: BlockHeader;
     let blockId: string;
-    let blockSignature: string;
+    let blockHeaderUnfinalized: BlockHeader;
+    let blockIdUnfinalized: string;
 
     before(async () => {
         env = await setupFuel();
 
-        // create a block
-        blockHeader = createBlock([], []);
+        // Create, commit, finalize a block
+        blockHeader = createBlock(0);
         blockId = computeBlockId(blockHeader);
-        blockSignature = await compactSign(env.poaSigner, blockId);
+        await env.fuelChainConsensus.commit(blockId, 0);
+        ethers.provider.send('evm_increaseTime', [TIME_TO_FINALIZE]);
+
+        // Create an unfinalized block
+        blockHeaderUnfinalized = createBlock(BLOCKS_PER_COMMIT_INTERVAL);
+        blockIdUnfinalized = computeBlockId(blockHeaderUnfinalized);
+        await env.fuelChainConsensus.commit(blockIdUnfinalized, 1);
     });
 
     describe('Verify access control', async () => {
@@ -137,53 +146,62 @@ describe('Fuel Chain Consensus', async () => {
 
     describe('Verify admin functions', async () => {
         const defaultAdminRole = '0x0000000000000000000000000000000000000000000000000000000000000000';
+        const committerRole = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('COMMITTER_ROLE'));
         let signer1: string;
+        let signer2: string;
         before(async () => {
             signer1 = env.addresses[1];
+            signer2 = env.addresses[2];
         });
 
-        it('Should be able to set authority as owner', async () => {
-            expect(await env.fuelChainConsensus.authorityKey()).to.not.be.equal(signer1);
+        it('Should be able to set comitter as admin', async () => {
+            expect(await env.fuelChainConsensus.hasRole(committerRole, signer1)).to.equal(false);
 
-            // Set authority
-            await expect(env.fuelChainConsensus.setAuthorityKey(signer1)).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.authorityKey()).to.be.equal(signer1);
+            // Set comitter
+            await expect(env.fuelChainConsensus.grantRole(committerRole, signer1)).to.not.be.reverted;
+            expect(await env.fuelChainConsensus.hasRole(committerRole, signer1)).to.equal(true);
         });
 
-        it('Should not be able to set authority as non-owner', async () => {
-            expect(await env.fuelChainConsensus.authorityKey()).to.be.equal(signer1);
+        it('Should not be able to set committer role as non-admin', async () => {
+            expect(await env.fuelChainConsensus.hasRole(committerRole, signer2)).to.equal(false);
 
-            // Attempt set authority
+            // Attempt set comitter
             await expect(
-                env.fuelChainConsensus.connect(env.signers[1]).setAuthorityKey(env.poaSignerAddress)
+                env.fuelChainConsensus.connect(env.signers[1]).grantRole(committerRole, signer2)
             ).to.be.revertedWith(
                 `AccessControl: account ${env.addresses[1].toLowerCase()} is missing role ${defaultAdminRole}`
             );
-            expect(await env.fuelChainConsensus.authorityKey()).to.be.equal(signer1);
+            expect(await env.fuelChainConsensus.hasRole(committerRole, signer2)).to.equal(false);
         });
 
-        it('Should be able to switch authority back', async () => {
-            expect(await env.fuelChainConsensus.authorityKey()).to.not.be.equal(env.poaSignerAddress);
+        it('Should not be able to make commits as non-comitter', async () => {
+            const blockHash = await env.fuelChainConsensus.blockHashAtCommit(9);
+            await expect(env.fuelChainConsensus.connect(env.signers[2]).commit(randomBytes32(), 9)).to.be.revertedWith(
+                `AccessControl: account ${env.addresses[2].toLowerCase()} is missing role ${committerRole}`
+            );
+            expect(await env.fuelChainConsensus.blockHashAtCommit(9)).to.equal(blockHash);
+        });
 
-            // Set authority
-            await expect(env.fuelChainConsensus.setAuthorityKey(env.poaSignerAddress)).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.authorityKey()).to.be.equal(env.poaSignerAddress);
+        it('Should be able to make commits as comitter', async () => {
+            const blockHash = randomBytes32();
+            await expect(env.fuelChainConsensus.connect(env.signers[1]).commit(blockHash, 9)).to.not.be.reverted;
+            expect(await env.fuelChainConsensus.blockHashAtCommit(9)).to.equal(blockHash);
         });
     });
 
     describe('Verify valid blocks', async () => {
-        let badSignature: string;
-        before(async () => {
-            const badSigner = new SigningKey('0x44bacb478cbed5efcae784d7bf4f2ff80ac0974bec39a17e36ba4a6b4d238ff9');
-            badSignature = await compactSign(badSigner, blockId);
+        it('Should be able to verify valid block', async () => {
+            expect(await env.fuelChainConsensus.finalized(blockId, 0)).to.be.equal(true);
         });
 
-        it('Should be able to verify valid block', async () => {
-            expect(await env.fuelChainConsensus.verifyBlock(blockId, blockSignature)).to.be.equal(true);
+        it('Should not be able to verify unfinalized block', async () => {
+            expect(await env.fuelChainConsensus.finalized(blockIdUnfinalized, BLOCKS_PER_COMMIT_INTERVAL)).to.be.equal(
+                false
+            );
         });
 
         it('Should not be able to verify invalid block', async () => {
-            expect(await env.fuelChainConsensus.verifyBlock(blockId, badSignature)).to.be.equal(false);
+            await expect(env.fuelChainConsensus.finalized(randomBytes32(), 0)).to.be.revertedWith('Unknown block');
         });
     });
 
@@ -238,9 +256,11 @@ describe('Fuel Chain Consensus', async () => {
         });
 
         it('Should not be able to verify blocks when paused', async () => {
-            await expect(env.fuelChainConsensus.verifyBlock(blockId, blockSignature)).to.be.revertedWith(
-                'Pausable: paused'
-            );
+            await expect(env.fuelChainConsensus.finalized(blockId, 0)).to.be.revertedWith('Pausable: paused');
+        });
+
+        it('Should not be able to commit blocks when paused', async () => {
+            await expect(env.fuelChainConsensus.commit(randomBytes32(), 9)).to.be.revertedWith('Pausable: paused');
         });
 
         it('Should be able to unpause as admin', async () => {
@@ -252,7 +272,7 @@ describe('Fuel Chain Consensus', async () => {
         });
 
         it('Should be able to verify block when unpaused', async () => {
-            expect(await env.fuelChainConsensus.verifyBlock(blockId, blockSignature)).to.be.equal(true);
+            expect(await env.fuelChainConsensus.finalized(blockId, 0)).to.be.equal(true);
         });
 
         it('Should be able to revoke pauser role', async () => {

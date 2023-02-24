@@ -6,10 +6,6 @@ import { FuelChainConsensus } from '../typechain/FuelChainConsensus.d';
 import { FuelMessagePortal } from '../typechain/FuelMessagePortal.d';
 import { FuelERC20Gateway } from '../typechain/FuelERC20Gateway.d';
 import { Token } from '../typechain/Token.d';
-import { computeAddress, SigningKey } from 'ethers/lib/utils';
-
-// Well known private key for testing.
-export const DEFAULT_POA_KEY = '0xc87509a1c067bbde78beb793e6fa76530b6382a4c0241e5e4a9ec0a0f44dc0d3';
 
 // All deployable contracts.
 export interface DeployedContracts {
@@ -33,8 +29,6 @@ export interface HarnessObject {
     fuelChainConsensus: FuelChainConsensus;
     fuelERC20Gateway: FuelERC20Gateway;
     token: Token;
-    poaSigner: SigningKey;
-    poaSignerAddress: string;
     signer: string;
     signers: Array<Signer>;
     addresses: Array<string>;
@@ -67,16 +61,12 @@ export async function getContractAddresses(contracts: DeployedContracts): Promis
 
 // The setup method for Fuel.
 export async function setupFuel(): Promise<HarnessObject> {
-    // Create test POA signer
-    const poaSigner = new SigningKey(DEFAULT_POA_KEY);
-    const poaSignerAddress = computeAddress(poaSigner.privateKey);
-
     // Get signers
     const signer = (await ethers.getSigners())[0].address;
     const signers = await ethers.getSigners();
 
     // Deploy Fuel contracts
-    const contracts = await deployFuel(poaSignerAddress);
+    const contracts = await deployFuel();
 
     // Deploy a token for gateway testing
     const tokenFactory = await ethers.getContractFactory('Token');
@@ -96,8 +86,6 @@ export async function setupFuel(): Promise<HarnessObject> {
         fuelMessagePortal: contracts.fuelMessagePortal,
         fuelERC20Gateway: contracts.fuelERC20Gateway,
         token,
-        poaSigner,
-        poaSignerAddress,
         signer,
         signers,
         addresses: (await ethers.getSigners()).map((v) => v.address),
@@ -106,12 +94,10 @@ export async function setupFuel(): Promise<HarnessObject> {
 }
 
 // The full contract deployment for Fuel.
-export async function deployFuel(poaSignerAddress?: string): Promise<DeployedContracts> {
-    poaSignerAddress = poaSignerAddress || (await ethers.getSigners())[0].address;
-
+export async function deployFuel(): Promise<DeployedContracts> {
     // Deploy fuel chain consensus contract
     const FuelChainConsensus = await ethers.getContractFactory('FuelChainConsensus');
-    const fuelChainConsensus = (await upgrades.deployProxy(FuelChainConsensus, [poaSignerAddress], {
+    const fuelChainConsensus = (await upgrades.deployProxy(FuelChainConsensus, [], {
         initializer: 'initialize',
     })) as FuelChainConsensus;
     await fuelChainConsensus.deployed();

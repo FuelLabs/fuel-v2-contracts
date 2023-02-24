@@ -39,7 +39,7 @@ describe('Contract Upgradability', async () => {
         });
 
         it('Should not be able to call initializers', async () => {
-            await expect(env.fuelChainConsensus.initialize(env.signer)).to.be.revertedWith(
+            await expect(env.fuelChainConsensus.initialize()).to.be.revertedWith(
                 'Initializable: contract is already initialized'
             );
             await expect(env.fuelMessagePortal.initialize(env.fuelChainConsensus.address)).to.be.revertedWith(
