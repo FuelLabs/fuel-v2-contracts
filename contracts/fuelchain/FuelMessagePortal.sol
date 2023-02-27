@@ -50,8 +50,17 @@ contract FuelMessagePortal is
     // Events //
     ////////////
 
-    /// @notice Emitted when a Message is sent from the EVM to Fuel
-    event SentMessage(bytes32 indexed sender, bytes32 indexed recipient, uint64 nonce, uint64 amount, bytes data);
+    /// @dev Emitted when a message is sent from Ethereum to Fuel
+    event MessageSent(
+        bytes32 indexed sender,
+        bytes32 indexed recipient,
+        uint64 indexed nonce,
+        uint64 amount,
+        bytes data
+    );
+
+    /// @dev Emitted when a message is successfully relayed to Ethereum from Fuel
+    event MessageRelayed(bytes32 indexed messageId, bytes32 indexed sender, bytes32 indexed recipient, uint64 amount);
 
     ///////////////
     // Constants //
@@ -261,7 +270,7 @@ contract FuelMessagePortal is
             }
 
             //emit message for Fuel clients to pickup (messageID calculated offchain)
-            emit SentMessage(sender, recipient, _outgoingMessageNonce, uint64(amount), data);
+            emit MessageSent(sender, recipient, _outgoingMessageNonce, uint64(amount), data);
 
             // increment nonce for next message
             ++_outgoingMessageNonce;
@@ -314,6 +323,9 @@ contract FuelMessagePortal is
 
         //keep track of successfully relayed messages
         _incomingMessageSuccessful[messageId] = true;
+
+        //emit event for successful message relay
+        emit MessageRelayed(messageId, message.sender, message.recipient, message.amount);
     }
 
     /// @notice Executes a message in the given header
