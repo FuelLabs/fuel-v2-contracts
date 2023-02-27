@@ -12,7 +12,6 @@ import {FuelBlockHeader, FuelBlockHeaderLib} from "./types/FuelBlockHeader.sol";
 import {FuelBlockHeaderLite, FuelBlockHeaderLiteLib} from "./types/FuelBlockHeaderLite.sol";
 import {SafeCall} from "../vendor/SafeCall.sol";
 import {CryptographyLib} from "../lib/Cryptography.sol";
-import {IFuelMessagePortal} from "../messaging/IFuelMessagePortal.sol";
 
 /// @notice Structure for proving an element in a merkle tree
 struct MerkleProof {
@@ -29,10 +28,15 @@ struct Message {
     bytes data;
 }
 
+/// @notice Common predicates for Fuel inputs
+library CommonPredicates {
+    bytes32 public constant CONTRACT_MESSAGE_PREDICATE =
+        0x4df15e4a7c602404e353b7766db23a0d067960c201eb2d7a695a166548c4d80a;
+}
+
 /// @title FuelMessagePortal
 /// @notice The Fuel Message Portal contract sends messages to and from Fuel
 contract FuelMessagePortal is
-    IFuelMessagePortal,
     Initializable,
     PausableUpgradeable,
     AccessControlUpgradeable,
@@ -41,6 +45,13 @@ contract FuelMessagePortal is
 {
     using FuelBlockHeaderLib for FuelBlockHeader;
     using FuelBlockHeaderLiteLib for FuelBlockHeaderLite;
+
+    ////////////
+    // Events //
+    ////////////
+
+    /// @notice Emitted when a Message is sent from the EVM to Fuel
+    event SentMessage(bytes32 indexed sender, bytes32 indexed recipient, uint64 nonce, uint64 amount, bytes data);
 
     ///////////////
     // Constants //
