@@ -7,7 +7,7 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import {SafeERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-import {IFuelMessagePortal, InputMessagePredicates} from "../IFuelMessagePortal.sol";
+import {FuelMessagePortal, CommonPredicates} from "../../fuelchain/FuelMessagePortal.sol";
 import {FuelMessagesEnabledUpgradeable} from "../FuelMessagesEnabledUpgradeable.sol";
 
 /// @title FuelERC20Gateway
@@ -47,8 +47,8 @@ contract FuelERC20Gateway is
     }
 
     /// @notice Contract initializer to setup starting values
-    /// @param fuelMessagePortal The IfuelMessagePortal contract
-    function initialize(IFuelMessagePortal fuelMessagePortal) public initializer {
+    /// @param fuelMessagePortal The FuelMessagePortal contract
+    function initialize(FuelMessagePortal fuelMessagePortal) public initializer {
         __FuelMessagesEnabled_init(fuelMessagePortal);
         __Pausable_init();
         __AccessControl_init();
@@ -106,7 +106,7 @@ contract FuelERC20Gateway is
             to,
             bytes32(amount)
         );
-        sendMessage(InputMessagePredicates.CONTRACT_MESSAGE_PREDICATE, data);
+        sendMessage(CommonPredicates.CONTRACT_MESSAGE_PREDICATE, data);
     }
 
     /// @notice Finalizes the withdrawal process from the Fuel side gateway contract
