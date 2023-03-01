@@ -36,6 +36,7 @@ contract FuelChainConsensus is Initializable, PausableUpgradeable, AccessControl
     // Events //
     ////////////
 
+    /// @dev Emitted when a commit is first submitted
     event CommitSubmitted(uint256 indexed commitHeight, bytes32 blockHash);
 
     /////////////

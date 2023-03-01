@@ -22,6 +22,16 @@ contract FuelERC20Gateway is
 {
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
+    ////////////
+    // Events //
+    ////////////
+
+    /// @dev Emitted when tokens are deposited from Ethereum to Fuel
+    event Deposit(bytes32 indexed sender, address indexed tokenId, bytes32 fuelTokenId, uint256 amount);
+
+    /// @dev Emitted when tokens are withdrawn from Fuel to Ethereum
+    event Withdrawal(bytes32 indexed recipient, address indexed tokenId, bytes32 fuelTokenId, uint256 amount);
+
     ///////////////
     // Constants //
     ///////////////
@@ -107,6 +117,9 @@ contract FuelERC20Gateway is
             bytes32(amount)
         );
         sendMessage(CommonPredicates.CONTRACT_MESSAGE_PREDICATE, data);
+
+        //emit event for successful token deposit
+        emit Deposit(bytes32(uint256(uint160(msg.sender))), tokenId, fuelTokenId, amount);
     }
 
     /// @notice Finalizes the withdrawal process from the Fuel side gateway contract
@@ -125,6 +138,9 @@ contract FuelERC20Gateway is
         //reduce deposit balance and transfer tokens (math will underflow if amount is larger than allowed)
         _deposits[tokenId][fuelTokenId] = _deposits[tokenId][fuelTokenId] - amount;
         IERC20Upgradeable(tokenId).safeTransfer(to, amount);
+
+        //emit event for successful token withdraw
+        emit Withdrawal(bytes32(uint256(uint160(to))), tokenId, fuelTokenId, amount);
     }
 
     ////////////////////////

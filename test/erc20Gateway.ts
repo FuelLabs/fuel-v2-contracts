@@ -400,7 +400,7 @@ describe('ERC20 Gateway', async () => {
                 gatewayBalance.add(175).add(250)
             );
 
-            // Verify SentMessage event to l2contract
+            // Verify MessageSent event to l2contract
             const messageData = computeMessageData(
                 fuelTokenTarget2,
                 tokenAddress.split('0x').join('0x000000000000000000000000'),
@@ -412,11 +412,11 @@ describe('ERC20 Gateway', async () => {
                 address: env.fuelMessagePortal.address,
             };
             const logs2 = await provider.getLogs(filter2);
-            const sentMessageEvent = env.fuelMessagePortal.interface.parseLog(logs2[logs2.length - 1]);
-            expect(sentMessageEvent.name).to.equal('SentMessage');
-            expect(sentMessageEvent.args.sender).to.equal(gatewayAddress);
-            expect(sentMessageEvent.args.data).to.equal(messageData);
-            expect(sentMessageEvent.args.amount).to.equal(0);
+            const messageSentEvent = env.fuelMessagePortal.interface.parseLog(logs2[logs2.length - 1]);
+            expect(messageSentEvent.name).to.equal('MessageSent');
+            expect(messageSentEvent.args.sender).to.equal(gatewayAddress);
+            expect(messageSentEvent.args.data).to.equal(messageData);
+            expect(messageSentEvent.args.amount).to.equal(0);
         });
     });
 
