@@ -102,6 +102,18 @@ describe('Incoming Messages', async () => {
     let unflinalizedBlock: BlockHeader;
     let prevBlockNodes: TreeNode[];
 
+    // Blank data
+    const emptyMerkleProof: MerkleProof = {
+        key: 0,
+        proof: [],
+    };
+    const emptyBlockHeaderLight: BlockHeaderLite = {
+        prevRoot: ZERO,
+        height: ZERO,
+        timestamp: ZERO,
+        applicationHash: ZERO,
+    };
+
     // Helper function to setup test data
     function generateProof(message: Message, prevBlockDistance = 1): [string, BlockHeader, MerkleProof, MerkleProof] {
         const messageBlockIndex = BLOCKS_PER_COMMIT_INTERVAL - 1 - prevBlockDistance;
@@ -381,14 +393,22 @@ describe('Incoming Messages', async () => {
             const [msgID, msgInBlock] = generateJustMessageProof(message1);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     message1,
+                    emptyBlockHeaderLight,
                     createBlock('', BLOCKS_PER_COMMIT_INTERVAL * 20 - 1),
+                    emptyMerkleProof,
                     msgInBlock
                 )
             ).to.be.revertedWith('Unknown block');
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(message1, unflinalizedBlock, msgInBlock)
+                env.fuelMessagePortal.relayMessage(
+                    message1,
+                    emptyBlockHeaderLight,
+                    unflinalizedBlock,
+                    emptyMerkleProof,
+                    msgInBlock
+                )
             ).to.be.revertedWith('Unfinalized block');
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
         });
@@ -397,7 +417,7 @@ describe('Incoming Messages', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(message1, 24);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     message1,
                     generateBlockHeaderLite(createBlock('', BLOCKS_PER_COMMIT_INTERVAL * 20 - 1)),
                     msgBlockHeader,
@@ -406,14 +426,14 @@ describe('Incoming Messages', async () => {
                 )
             ).to.be.revertedWith('Unknown block');
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     message1,
                     generateBlockHeaderLite(unflinalizedBlock),
                     msgBlockHeader,
                     blockInRoot,
                     msgInBlock
                 )
-            ).to.be.revertedWith('Unfinalized block');
+            ).to.be.revertedWith('Unfinalized root block');
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
         });
 
@@ -424,7 +444,7 @@ describe('Incoming Messages', async () => {
             blockInRoot.key = blockInRoot.key + 1;
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     message1,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -443,7 +463,7 @@ describe('Incoming Messages', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(message1, 22);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     message1,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -462,7 +482,7 @@ describe('Incoming Messages', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(message1, 68);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(true);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     message1,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -479,7 +499,7 @@ describe('Incoming Messages', async () => {
             };
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageWithAmount,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -497,7 +517,7 @@ describe('Incoming Messages', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageWithAmount, 33);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageWithAmount,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -520,7 +540,7 @@ describe('Incoming Messages', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageBadSender, 47);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageBadSender,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -535,7 +555,7 @@ describe('Incoming Messages', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageBadRecipient, 69);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageBadRecipient,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -550,7 +570,7 @@ describe('Incoming Messages', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageBadData, 21);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageBadData,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -567,7 +587,7 @@ describe('Incoming Messages', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageEOA, 19);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageEOA,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -590,7 +610,7 @@ describe('Incoming Messages', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageEOANoAmount, 25);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageEOANoAmount,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -616,7 +636,7 @@ describe('Incoming Messages', async () => {
             };
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     diffBlock,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -637,7 +657,13 @@ describe('Incoming Messages', async () => {
                 proof: [],
             };
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(message2, endOfCommitIntervalHeader, msgInBlock)
+                env.fuelMessagePortal.relayMessage(
+                    message2,
+                    emptyBlockHeaderLight,
+                    endOfCommitIntervalHeader,
+                    emptyMerkleProof,
+                    msgInBlock
+                )
             ).to.be.revertedWith('Invalid message in block proof');
             expect(await provider.getBalance(env.fuelMessagePortal.address)).to.be.equal(portalBalance);
             expect(await provider.getBalance(messageTester.address)).to.be.equal(messageTesterBalance);
@@ -646,10 +672,13 @@ describe('Incoming Messages', async () => {
         it('Should not be able to relay reentrant messages', async () => {
             // create a message that attempts to relay another message
             const [, rTestMsgBlockHeader, rTestBlockInRoot, rTestMsgInBlock] = generateProof(message1, 5);
-            const reentrantTestData = env.fuelMessagePortal.interface.encodeFunctionData(
-                'relayMessageFromPrevFuelBlock',
-                [message1, endOfCommitIntervalHeaderLite, rTestMsgBlockHeader, rTestBlockInRoot, rTestMsgInBlock]
-            );
+            const reentrantTestData = env.fuelMessagePortal.interface.encodeFunctionData('relayMessage', [
+                message1,
+                endOfCommitIntervalHeaderLite,
+                rTestMsgBlockHeader,
+                rTestBlockInRoot,
+                rTestMsgInBlock,
+            ]);
             const messageReentrant = new Message(
                 trustedSenderAddress,
                 fuelMessagePortalContractAddress,
@@ -692,10 +721,10 @@ describe('Incoming Messages', async () => {
                 proof: getProof(messageReentrantMessageNodes, messageLeafIndexKey),
             };
 
-            // re-enter via relayMessageFromPrevFuelBlock
+            // re-enter via relayMessage
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(messageReentrantId)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageReentrant,
                     generateBlockHeaderLite(reentrantTestRootBlock),
                     reentrantTestMessageBlock,
@@ -761,10 +790,16 @@ describe('Incoming Messages', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(message2, 51);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(message2, endOfCommitIntervalHeader, msgInBlock)
+                env.fuelMessagePortal.relayMessage(
+                    message2,
+                    emptyBlockHeaderLight,
+                    endOfCommitIntervalHeader,
+                    emptyMerkleProof,
+                    msgInBlock
+                )
             ).to.be.revertedWith('Pausable: paused');
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     message2,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -787,7 +822,13 @@ describe('Incoming Messages', async () => {
             const [msgID, msgInBlock] = generateJustMessageProof(message2);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromFuelBlock(message2, endOfCommitIntervalHeader, msgInBlock)
+                env.fuelMessagePortal.relayMessage(
+                    message2,
+                    emptyBlockHeaderLight,
+                    endOfCommitIntervalHeader,
+                    emptyMerkleProof,
+                    msgInBlock
+                )
             ).to.not.be.reverted;
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(true);
             expect(await messageTester.data1()).to.be.equal(messageTestData2);

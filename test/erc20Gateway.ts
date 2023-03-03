@@ -433,7 +433,7 @@ describe('ERC20 Gateway', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageWithdrawal1, 23);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageWithdrawal1,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -452,7 +452,7 @@ describe('ERC20 Gateway', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageWithdrawal2, 73);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageWithdrawal2,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -471,7 +471,7 @@ describe('ERC20 Gateway', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageTooLarge, 38);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageTooLarge,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -490,7 +490,7 @@ describe('ERC20 Gateway', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageTooSmall, 47);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageTooSmall,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -509,7 +509,7 @@ describe('ERC20 Gateway', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageBadL2Token, 85);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageBadL2Token,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -528,7 +528,7 @@ describe('ERC20 Gateway', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageBadL1Token, 19);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageBadL1Token,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -547,7 +547,7 @@ describe('ERC20 Gateway', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageBadSender, 26);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageBadSender,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -615,7 +615,7 @@ describe('ERC20 Gateway', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageWithdrawal3, 31);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageWithdrawal3,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
@@ -650,7 +650,7 @@ describe('ERC20 Gateway', async () => {
             const [msgID, msgBlockHeader, blockInRoot, msgInBlock] = generateProof(messageWithdrawal3, 37);
             expect(await env.fuelMessagePortal.incomingMessageSuccessful(msgID)).to.be.equal(false);
             await expect(
-                env.fuelMessagePortal.relayMessageFromPrevFuelBlock(
+                env.fuelMessagePortal.relayMessage(
                     messageWithdrawal3,
                     endOfCommitIntervalHeaderLite,
                     msgBlockHeader,
