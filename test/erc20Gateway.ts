@@ -40,7 +40,7 @@ function computeMessageData(
     data?: number[]
 ): string {
     if (data) {
-        let depositToContractFlag = ethers.utils
+        const depositToContractFlag = ethers.utils
             .keccak256(ethers.utils.toUtf8Bytes('DEPOSIT_TO_CONTRACT'))
             .substring(0, 4);
         if (data.length == 0) {
