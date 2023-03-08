@@ -163,58 +163,62 @@ contract FuelMessagePortal is
 
     /// @notice Relays a message published on Fuel from a given block
     /// @param message The message to relay
-    /// @param blockHeader The block containing the message
-    /// @param messageInBlockProof Proof that message exists in block
-    /// @dev Made payable to reduce gas costs
-    function relayMessageFromFuelBlock(
-        Message calldata message,
-        FuelBlockHeader calldata blockHeader,
-        MerkleProof calldata messageInBlockProof
-    ) external payable whenNotPaused {
-        //verify block header
-        require(
-            _fuelChainConsensus.finalized(blockHeader.computeConsensusHeaderHash(), blockHeader.height),
-            "Unfinalized block"
-        );
-
-        //execute message
-        _executeMessageInHeader(message, blockHeader, messageInBlockProof);
-    }
-
-    /// @notice Relays a message published on Fuel from a given block
-    /// @param message The message to relay
     /// @param rootBlockHeader The root block for proving chain history
     /// @param blockHeader The block containing the message
     /// @param blockInHistoryProof Proof that the message block exists in the history of the root block
     /// @param messageInBlockProof Proof that message exists in block
     /// @dev Made payable to reduce gas costs
-    function relayMessageFromPrevFuelBlock(
+    function relayMessage(
         Message calldata message,
         FuelBlockHeaderLite calldata rootBlockHeader,
         FuelBlockHeader calldata blockHeader,
         MerkleProof calldata blockInHistoryProof,
         MerkleProof calldata messageInBlockProof
     ) external payable whenNotPaused {
-        //verify root block header
-        require(
-            _fuelChainConsensus.finalized(rootBlockHeader.computeConsensusHeaderHash(), rootBlockHeader.height),
-            "Unfinalized block"
-        );
+        //check if proving directly from block or indirectly from a root block
+        if (rootBlockHeader.prevRoot == bytes32(0)) {
+            //verify block header
+            require(
+                _fuelChainConsensus.finalized(blockHeader.computeConsensusHeaderHash(), blockHeader.height),
+                "Unfinalized block"
+            );
+        } else {
+            //verify root block header
+            require(
+                _fuelChainConsensus.finalized(rootBlockHeader.computeConsensusHeaderHash(), rootBlockHeader.height),
+                "Unfinalized root block"
+            );
 
-        //verify block in history
+            //verify block in history
+            require(
+                verifyBinaryTree(
+                    rootBlockHeader.prevRoot,
+                    abi.encodePacked(blockHeader.computeConsensusHeaderHash()),
+                    blockInHistoryProof.proof,
+                    blockInHistoryProof.key,
+                    rootBlockHeader.height
+                ),
+                "Invalid block in history proof"
+            );
+        }
+
+        //verify message in block
+        bytes32 messageId = CryptographyLib.hash(
+            abi.encodePacked(message.sender, message.recipient, message.nonce, message.amount, message.data)
+        );
         require(
             verifyBinaryTree(
-                rootBlockHeader.prevRoot,
-                abi.encodePacked(blockHeader.computeConsensusHeaderHash()),
-                blockInHistoryProof.proof,
-                blockInHistoryProof.key,
-                rootBlockHeader.height
+                blockHeader.outputMessagesRoot,
+                abi.encodePacked(messageId),
+                messageInBlockProof.proof,
+                messageInBlockProof.key,
+                blockHeader.outputMessagesCount
             ),
-            "Invalid block in history proof"
+            "Invalid message in block proof"
         );
 
         //execute message
-        _executeMessageInHeader(message, blockHeader, messageInBlockProof);
+        _executeMessage(messageId, message);
     }
 
     /// @notice Gets if the given message ID has been relayed successfully
@@ -278,31 +282,10 @@ contract FuelMessagePortal is
     }
 
     /// @notice Executes a message in the given header
+    /// @param messageId The id of message to execute
     /// @param message The message to execute
-    /// @param blockHeader The block containing the message
-    /// @param messageInBlockProof Proof that message exists in block
-    function _executeMessageInHeader(
-        Message calldata message,
-        FuelBlockHeader calldata blockHeader,
-        MerkleProof calldata messageInBlockProof
-    ) private nonReentrant {
-        //verify message validity
-        bytes32 messageId = CryptographyLib.hash(
-            abi.encodePacked(message.sender, message.recipient, message.nonce, message.amount, message.data)
-        );
+    function _executeMessage(bytes32 messageId, Message calldata message) private nonReentrant {
         require(!_incomingMessageSuccessful[messageId], "Already relayed");
-
-        //verify message in block
-        require(
-            verifyBinaryTree(
-                blockHeader.outputMessagesRoot,
-                abi.encodePacked(messageId),
-                messageInBlockProof.proof,
-                messageInBlockProof.key,
-                blockHeader.outputMessagesCount
-            ),
-            "Invalid message in block proof"
-        );
 
         //set message sender for receiving contract to reference
         _incomingMessageSender = message.sender;
