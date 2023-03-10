@@ -37,6 +37,9 @@ contract FuelERC20Gateway is
     ///////////////
 
     /// @dev The admin related contract roles
+    bytes1 public constant DEPOSIT_TO_CONTRACT = bytes1(keccak256("DEPOSIT_TO_CONTRACT"));
+
+    /// @dev The admin related contract roles
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     /////////////
@@ -95,31 +98,59 @@ contract FuelERC20Gateway is
         return _deposits[tokenAddress][fuelTokenId];
     }
 
-    /// @notice Deposits the given tokens to an address on Fuel
-    /// @param to Fuel account or contract to deposit tokens to
+    /// @notice Deposits the given tokens to an account on Fuel
+    /// @param to Fuel account to deposit tokens to
     /// @param tokenId ID of the token being transferred to Fuel
     /// @param fuelTokenId ID of the token on Fuel that represent the deposited tokens
     /// @param amount Amount of tokens to deposit
     /// @dev Made payable to reduce gas costs
     function deposit(bytes32 to, address tokenId, bytes32 fuelTokenId, uint256 amount) external payable whenNotPaused {
-        require(amount > 0, "Cannot deposit zero");
-
-        //transfer tokens to this contract and update deposit balance
-        IERC20Upgradeable(tokenId).safeTransferFrom(msg.sender, address(this), amount);
-        _deposits[tokenId][fuelTokenId] = _deposits[tokenId][fuelTokenId] + amount;
-
-        //send message to gateway on Fuel to finalize the deposit
-        bytes memory data = abi.encodePacked(
+        bytes memory messageData = abi.encodePacked(
             fuelTokenId,
             bytes32(uint256(uint160(tokenId))),
             bytes32(uint256(uint160(msg.sender))), //from
             to,
             bytes32(amount)
         );
-        sendMessage(CommonPredicates.CONTRACT_MESSAGE_PREDICATE, data);
+        _deposit(tokenId, fuelTokenId, amount, messageData);
+    }
 
-        //emit event for successful token deposit
-        emit Deposit(bytes32(uint256(uint160(msg.sender))), tokenId, fuelTokenId, amount);
+    /// @notice Deposits the given tokens to a contract on Fuel with optional data
+    /// @param to Fuel account or contract to deposit tokens to
+    /// @param tokenId ID of the token being transferred to Fuel
+    /// @param fuelTokenId ID of the token on Fuel that represent the deposited tokens
+    /// @param amount Amount of tokens to deposit
+    /// @param data Optional data to send with the deposit
+    /// @dev Made payable to reduce gas costs
+    function depositWithData(
+        bytes32 to,
+        address tokenId,
+        bytes32 fuelTokenId,
+        uint256 amount,
+        bytes memory data
+    ) external payable whenNotPaused {
+        if (data.length == 0) {
+            bytes memory messageData = abi.encodePacked(
+                fuelTokenId,
+                bytes32(uint256(uint160(tokenId))),
+                bytes32(uint256(uint160(msg.sender))), //from
+                to,
+                bytes32(amount),
+                DEPOSIT_TO_CONTRACT
+            );
+            _deposit(tokenId, fuelTokenId, amount, messageData);
+        } else {
+            bytes memory messageData = abi.encodePacked(
+                fuelTokenId,
+                bytes32(uint256(uint160(tokenId))),
+                bytes32(uint256(uint160(msg.sender))), //from
+                to,
+                bytes32(amount),
+                DEPOSIT_TO_CONTRACT,
+                data
+            );
+            _deposit(tokenId, fuelTokenId, amount, messageData);
+        }
     }
 
     /// @notice Finalizes the withdrawal process from the Fuel side gateway contract
@@ -146,6 +177,23 @@ contract FuelERC20Gateway is
     ////////////////////////
     // Internal Functions //
     ////////////////////////
+
+    /// @notice Deposits the given tokens to an account or contract on Fuel
+    /// @param tokenId ID of the token being transferred to Fuel
+    /// @param fuelTokenId ID of the token on Fuel that represent the deposited tokens
+    /// @param amount Amount of tokens to deposit
+    /// @param messageData The data of the message to send for deposit
+    /// @dev Made payable to reduce gas costs
+    function _deposit(address tokenId, bytes32 fuelTokenId, uint256 amount, bytes memory messageData) private {
+        require(amount > 0, "Cannot deposit zero");
+
+        //transfer tokens to this contract and update deposit balance
+        IERC20Upgradeable(tokenId).safeTransferFrom(msg.sender, address(this), amount);
+        _deposits[tokenId][fuelTokenId] = _deposits[tokenId][fuelTokenId] + amount;
+
+        //send message to gateway on Fuel to finalize the deposit
+        sendMessage(CommonPredicates.CONTRACT_MESSAGE_PREDICATE, messageData);
+    }
 
     /// @notice Executes a message in the given header
     // solhint-disable-next-line no-empty-blocks

@@ -31,7 +31,30 @@ declare class MerkleProof {
 }
 
 // Computes data for message
-function computeMessageData(fuelTokenId: string, tokenId: string, from: string, to: string, amount: number): string {
+function computeMessageData(
+    fuelTokenId: string,
+    tokenId: string,
+    from: string,
+    to: string,
+    amount: number,
+    data?: number[]
+): string {
+    if (data) {
+        const depositToContractFlag = ethers.utils
+            .keccak256(ethers.utils.toUtf8Bytes('DEPOSIT_TO_CONTRACT'))
+            .substring(0, 4);
+        if (data.length == 0) {
+            return ethers.utils.solidityPack(
+                ['bytes32', 'bytes32', 'bytes32', 'bytes32', 'uint256', 'bytes1'],
+                [fuelTokenId, tokenId, from, to, amount, depositToContractFlag]
+            );
+        } else {
+            return ethers.utils.solidityPack(
+                ['bytes32', 'bytes32', 'bytes32', 'bytes32', 'uint256', 'bytes1', 'bytes'],
+                [fuelTokenId, tokenId, from, to, amount, depositToContractFlag, data]
+            );
+        }
+    }
     return ethers.utils.solidityPack(
         ['bytes32', 'bytes32', 'bytes32', 'bytes32', 'uint256'],
         [fuelTokenId, tokenId, from, to, amount]
@@ -355,9 +378,11 @@ describe('ERC20 Gateway', async () => {
 
         it('Should not be able to deposit zero', async () => {
             const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
-            expect(await env.fuelERC20Gateway.tokensDeposited(tokenAddress, fuelTokenTarget1)).to.be.equal(
-                gatewayBalance
-            );
+            expect(
+                (await env.fuelERC20Gateway.tokensDeposited(tokenAddress, fuelTokenTarget1)).add(
+                    await env.fuelERC20Gateway.tokensDeposited(tokenAddress, fuelTokenTarget2)
+                )
+            ).to.be.equal(gatewayBalance);
 
             // Attempt deposit
             await expect(
@@ -368,9 +393,11 @@ describe('ERC20 Gateway', async () => {
 
         it('Should not be able to deposit with zero balance', async () => {
             const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
-            expect(await env.fuelERC20Gateway.tokensDeposited(tokenAddress, fuelTokenTarget1)).to.be.equal(
-                gatewayBalance
-            );
+            expect(
+                (await env.fuelERC20Gateway.tokensDeposited(tokenAddress, fuelTokenTarget1)).add(
+                    await env.fuelERC20Gateway.tokensDeposited(tokenAddress, fuelTokenTarget2)
+                )
+            ).to.be.equal(gatewayBalance);
 
             // Attempt deposit
             await expect(
@@ -379,25 +406,39 @@ describe('ERC20 Gateway', async () => {
                     .deposit(randomBytes32(), tokenAddress, fuelTokenTarget1, 175)
             ).to.be.revertedWith('ERC20: insufficient allowance');
             expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(gatewayBalance);
+
+            // Attempt deposit with data
+            await expect(
+                env.fuelERC20Gateway
+                    .connect(env.signers[1])
+                    .depositWithData(randomBytes32(), tokenAddress, fuelTokenTarget1, 175, [])
+            ).to.be.revertedWith('ERC20: insufficient allowance');
+            expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(gatewayBalance);
         });
 
         it('Should be able to deposit tokens', async () => {
             const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
-            expect(await env.fuelERC20Gateway.tokensDeposited(tokenAddress, fuelTokenTarget1)).to.be.equal(
-                gatewayBalance
+            expect(
+                (await env.fuelERC20Gateway.tokensDeposited(tokenAddress, fuelTokenTarget1)).add(
+                    await env.fuelERC20Gateway.tokensDeposited(tokenAddress, fuelTokenTarget2)
+                )
+            ).to.be.equal(gatewayBalance);
+
+            // Deposit to fuelTokenTarget1
+            const depositAmount1 = 175;
+            await expect(env.fuelERC20Gateway.deposit(randomBytes32(), tokenAddress, fuelTokenTarget1, depositAmount1))
+                .to.not.be.reverted;
+            expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(
+                gatewayBalance.add(depositAmount1)
             );
 
-            // Deposit 175 to fuelTokenTarget1
-            await expect(env.fuelERC20Gateway.deposit(randomBytes32(), tokenAddress, fuelTokenTarget1, 175)).to.not.be
-                .reverted;
-            expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(gatewayBalance.add(175));
-
-            // Deposit 250 to fuelTokenTarget2
+            // Deposit to fuelTokenTarget2
             const toAddress = randomBytes32();
-            await expect(env.fuelERC20Gateway.deposit(toAddress, tokenAddress, fuelTokenTarget2, 250)).to.not.be
-                .reverted;
+            const depositAmount2 = 250;
+            await expect(env.fuelERC20Gateway.deposit(toAddress, tokenAddress, fuelTokenTarget2, depositAmount2)).to.not
+                .be.reverted;
             expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(
-                gatewayBalance.add(175).add(250)
+                gatewayBalance.add(depositAmount1).add(depositAmount2)
             );
 
             // Verify MessageSent event to l2contract
@@ -406,13 +447,96 @@ describe('ERC20 Gateway', async () => {
                 tokenAddress.split('0x').join('0x000000000000000000000000'),
                 env.addresses[0].split('0x').join('0x000000000000000000000000'),
                 toAddress,
-                250
+                depositAmount2
             );
             const filter2 = {
                 address: env.fuelMessagePortal.address,
             };
             const logs2 = await provider.getLogs(filter2);
             const messageSentEvent = env.fuelMessagePortal.interface.parseLog(logs2[logs2.length - 1]);
+            expect(messageSentEvent.name).to.equal('MessageSent');
+            expect(messageSentEvent.args.sender).to.equal(gatewayAddress);
+            expect(messageSentEvent.args.data).to.equal(messageData);
+            expect(messageSentEvent.args.amount).to.equal(0);
+        });
+
+        it('Should be able to deposit tokens with data', async () => {
+            const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
+            expect(
+                (await env.fuelERC20Gateway.tokensDeposited(tokenAddress, fuelTokenTarget1)).add(
+                    await env.fuelERC20Gateway.tokensDeposited(tokenAddress, fuelTokenTarget2)
+                )
+            ).to.be.equal(gatewayBalance);
+
+            // Deposit to fuelTokenTarget1
+            const toAddress = randomBytes32();
+            const depositData = [3, 2, 6, 9, 2, 5];
+            const depositAmount = 85;
+            await expect(
+                env.fuelERC20Gateway.depositWithData(
+                    toAddress,
+                    tokenAddress,
+                    fuelTokenTarget1,
+                    depositAmount,
+                    depositData
+                )
+            ).to.not.be.reverted;
+            expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(
+                gatewayBalance.add(depositAmount)
+            );
+
+            // Verify MessageSent event to l2contract
+            const messageData = computeMessageData(
+                fuelTokenTarget1,
+                tokenAddress.split('0x').join('0x000000000000000000000000'),
+                env.addresses[0].split('0x').join('0x000000000000000000000000'),
+                toAddress,
+                depositAmount,
+                depositData
+            );
+            const filter = {
+                address: env.fuelMessagePortal.address,
+            };
+            const logs = await provider.getLogs(filter);
+            const messageSentEvent = env.fuelMessagePortal.interface.parseLog(logs[logs.length - 1]);
+            expect(messageSentEvent.name).to.equal('MessageSent');
+            expect(messageSentEvent.args.sender).to.equal(gatewayAddress);
+            expect(messageSentEvent.args.data).to.equal(messageData);
+            expect(messageSentEvent.args.amount).to.equal(0);
+        });
+
+        it('Should be able to deposit tokens with empty data', async () => {
+            const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
+            expect(
+                (await env.fuelERC20Gateway.tokensDeposited(tokenAddress, fuelTokenTarget1)).add(
+                    await env.fuelERC20Gateway.tokensDeposited(tokenAddress, fuelTokenTarget2)
+                )
+            ).to.be.equal(gatewayBalance);
+
+            // Deposit to fuelTokenTarget2
+            const toAddress = randomBytes32();
+            const depositAmount = 320;
+            await expect(
+                env.fuelERC20Gateway.depositWithData(toAddress, tokenAddress, fuelTokenTarget2, depositAmount, [])
+            ).to.not.be.reverted;
+            expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(
+                gatewayBalance.add(depositAmount)
+            );
+
+            // Verify MessageSent event to l2contract
+            const messageData = computeMessageData(
+                fuelTokenTarget2,
+                tokenAddress.split('0x').join('0x000000000000000000000000'),
+                env.addresses[0].split('0x').join('0x000000000000000000000000'),
+                toAddress,
+                depositAmount,
+                []
+            );
+            const filter = {
+                address: env.fuelMessagePortal.address,
+            };
+            const logs = await provider.getLogs(filter);
+            const messageSentEvent = env.fuelMessagePortal.interface.parseLog(logs[logs.length - 1]);
             expect(messageSentEvent.name).to.equal('MessageSent');
             expect(messageSentEvent.args.sender).to.equal(gatewayAddress);
             expect(messageSentEvent.args.data).to.equal(messageData);
@@ -632,6 +756,16 @@ describe('ERC20 Gateway', async () => {
             // Deposit 175 to fuelTokenTarget1
             await expect(
                 env.fuelERC20Gateway.deposit(randomBytes32(), tokenAddress, fuelTokenTarget1, 175)
+            ).to.be.revertedWith('Pausable: paused');
+            expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(gatewayBalance);
+        });
+
+        it('Should not be able to deposit with data when paused', async () => {
+            const gatewayBalance = await env.token.balanceOf(env.fuelERC20Gateway.address);
+
+            // Deposit 205 to fuelTokenTarget1
+            await expect(
+                env.fuelERC20Gateway.depositWithData(randomBytes32(), tokenAddress, fuelTokenTarget1, 205, [])
             ).to.be.revertedWith('Pausable: paused');
             expect(await env.token.balanceOf(env.fuelERC20Gateway.address)).to.be.equal(gatewayBalance);
         });
