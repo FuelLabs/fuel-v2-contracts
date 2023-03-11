@@ -175,32 +175,23 @@ contract FuelMessagePortal is
         MerkleProof calldata blockInHistoryProof,
         MerkleProof calldata messageInBlockProof
     ) external payable whenNotPaused {
-        //check if proving directly from block or indirectly from a root block
-        if (rootBlockHeader.prevRoot == bytes32(0)) {
-            //verify block header
-            require(
-                _fuelChainConsensus.finalized(blockHeader.computeConsensusHeaderHash(), blockHeader.height),
-                "Unfinalized block"
-            );
-        } else {
-            //verify root block header
-            require(
-                _fuelChainConsensus.finalized(rootBlockHeader.computeConsensusHeaderHash(), rootBlockHeader.height),
-                "Unfinalized root block"
-            );
+        //verify root block header
+        require(
+            _fuelChainConsensus.finalized(rootBlockHeader.computeConsensusHeaderHash(), rootBlockHeader.height),
+            "Unfinalized root block"
+        );
 
-            //verify block in history
-            require(
-                verifyBinaryTree(
-                    rootBlockHeader.prevRoot,
-                    abi.encodePacked(blockHeader.computeConsensusHeaderHash()),
-                    blockInHistoryProof.proof,
-                    blockInHistoryProof.key,
-                    rootBlockHeader.height
-                ),
-                "Invalid block in history proof"
-            );
-        }
+        //verify block in history
+        require(
+            verifyBinaryTree(
+                rootBlockHeader.prevRoot,
+                abi.encodePacked(blockHeader.computeConsensusHeaderHash()),
+                blockInHistoryProof.proof,
+                blockInHistoryProof.key,
+                rootBlockHeader.height
+            ),
+            "Invalid block in history proof"
+        );
 
         //verify message in block
         bytes32 messageId = CryptographyLib.hash(
