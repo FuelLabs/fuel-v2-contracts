@@ -193,6 +193,9 @@ contract FuelERC20Gateway is
 
         //send message to gateway on Fuel to finalize the deposit
         sendMessage(CommonPredicates.CONTRACT_MESSAGE_PREDICATE, messageData);
+
+        //emit event for successful token deposit
+        emit Deposit(bytes32(uint256(uint160(msg.sender))), tokenId, fuelTokenId, amount);
     }
 
     /// @notice Executes a message in the given header
