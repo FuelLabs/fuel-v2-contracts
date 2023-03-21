@@ -54,7 +54,7 @@ contract FuelMessagePortal is
     event MessageSent(
         bytes32 indexed sender,
         bytes32 indexed recipient,
-        uint64 indexed nonce,
+        uint256 indexed nonce,
         uint64 amount,
         bytes data
     );
@@ -90,7 +90,7 @@ contract FuelMessagePortal is
     FuelChainConsensus private _fuelChainConsensus;
 
     /// @notice Nonce for the next message to be sent
-    uint64 private _outgoingMessageNonce;
+    uint256 private _outgoingMessageNonce;
 
     /// @notice Mapping of message hash to boolean success value
     mapping(bytes32 => bool) private _incomingMessageSuccessful;
