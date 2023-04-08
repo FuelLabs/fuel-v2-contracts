@@ -6,7 +6,7 @@ import { componentSign } from '../protocol/validators';
 import { randomBytes } from 'crypto';
 import { randomBytes32 } from '../protocol/utils';
 import { ZERO } from '../protocol/constants';
-import { MEMORY_SIZE, calculateMemoryRoot, generateMemoryContext } from '../protocol/prover/utils';
+import { MEMORY_SIZE, memoryRoot, generateMemoryContext } from '../protocol/prover/utils';
 
 chai.use(solidity);
 const { expect } = chai;
@@ -30,22 +30,58 @@ describe('MemoryUtils', async () => {
             let toOffset = 1024 * 128 + 1024 * 16 * 3 + 512;
 
             console.log('Generating Memory Context...');
-            let fromContext = generateMemoryContext(memory, fromOffset, copyLength);
+            let [fromContext, _] = generateMemoryContext(memory, fromOffset, copyLength);
             console.log(fromContext);
-            let toContext = generateMemoryContext(memory, toOffset, copyLength);
+            let [toContext, toContextProof] = generateMemoryContext(memory, toOffset, copyLength);
             console.log(toContext);
+            console.log(toContextProof);
+
+            console.log('Computing End State Memory Root...');
+            let endMemory = memory.slice(0);
+            for (let i = 0; i < copyLength; i++) endMemory[i + toOffset] = memory[i + fromOffset];
+            console.log('End State Memory Root: ' + memoryRoot(endMemory));
 
             // 64KB - 2734894
             // 128KB - 5285752
+
+            // using context proofs
+            // 64KB - 1615622
+            // 128KB - 2980338
+            // 256KB - 5686979
             let root = '0x54453042ee94bf84543fa2a7d30cd75b63844de83fe4fd7f8e4e98c09e49382e';
             await memoryUtils.performCopy(
                 root,
                 memory.slice(fromOffset, fromOffset + copyLength),
                 fromContext,
-                memory.slice(toOffset, toOffset + copyLength),
                 toContext,
+                toContextProof,
                 { gasLimit: 30_000_000 }
             );
+            console.log(await memoryUtils.merkleRoot());
+            console.log('---------------------------------');
+            expect(await memoryUtils.merkleRoot()).to.equal(
+                '0xdedb618e3a6015fbe036f35131fa91133e6991a80f33dcad2acf030c84536e52'
+            );
+        }
+    });
+
+    it('test verifying a context proof', async () => {
+        let repeats = 0;
+        for (let r = 0; r < repeats; r++) {
+            console.log('Creating Data Set...');
+            let memory = generateTestMemory();
+
+            let length = 1024 * 64;
+            let offset = 2 ** MEMORY_SIZE - 1024 * 128 - 1024 * 32 * 7 + 512;
+
+            console.log('Generating Memory Context...');
+            let [context, proof] = generateMemoryContext(memory, offset, length);
+            console.log(context);
+            console.log(proof);
+
+            // 64KB - 180224
+            let root = '0x54453042ee94bf84543fa2a7d30cd75b63844de83fe4fd7f8e4e98c09e49382e';
+            await memoryUtils.verifyMemoryContext(root, context, proof, { gasLimit: 30_000_000 });
             console.log(await memoryUtils.merkleRoot());
             console.log('---------------------------------');
             expect(await memoryUtils.merkleRoot()).to.equal(
@@ -60,13 +96,14 @@ describe('MemoryUtils', async () => {
             console.log('Creating Data Set...');
             let memory = generateTestMemory();
 
-            console.log('Computing Memory Root...');
-            console.log('Memory Root: ' + calculateMemoryRoot(memory));
+            //console.log('Computing Memory Root...');
+            //console.log('Memory Root: ' + memoryRoot(memory));
 
             console.log('Generating Memory Context...');
-            let length = 1024 * 128;
+            let length = 1024 * 64;
             let offset = 2 ** MEMORY_SIZE - 1024 * 128 - 1024 * 32 * 7 + 512;
-            let context = generateMemoryContext(memory, offset, length);
+            //let offset = 1024 * 7 + 512;
+            let [context, _] = generateMemoryContext(memory, offset, length);
             console.log(context);
 
             // 1 - (64byte page) 90110
@@ -80,7 +117,7 @@ describe('MemoryUtils', async () => {
             // 32KB - 698601
             // 64KB - 1291673
             // 128KB - 2482660
-            await memoryUtils.memoryMerkleRoot(memory.slice(offset, offset + length), context, {
+            await memoryUtils.memoryRoot(memory.slice(offset, offset + length), context, {
                 gasLimit: 30_000_000,
             });
             console.log(await memoryUtils.merkleRoot());
