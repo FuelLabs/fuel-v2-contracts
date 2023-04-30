@@ -7,8 +7,8 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import {CryptographyLib} from "../lib/Cryptography.sol";
 
-/// @notice The Fuel v2 chain state consensus
-contract FuelChainConsensus is Initializable, PausableUpgradeable, AccessControlUpgradeable, UUPSUpgradeable {
+/// @notice The Fuel v2 chain state
+contract FuelChainState is Initializable, PausableUpgradeable, AccessControlUpgradeable, UUPSUpgradeable {
     ///////////////
     // Constants //
     ///////////////

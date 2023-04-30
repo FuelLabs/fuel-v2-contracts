@@ -2,7 +2,7 @@
 /// A set of useful helper methods for testing Fuel.
 import { ethers, upgrades } from 'hardhat';
 import { BigNumber as BN, Signer } from 'ethers';
-import { FuelChainConsensus } from '../typechain/FuelChainConsensus.d';
+import { FuelChainState } from '../typechain/FuelChainState.d';
 import { FuelMessagePortal } from '../typechain/FuelMessagePortal.d';
 import { FuelERC20Gateway } from '../typechain/FuelERC20Gateway.d';
 import { Token } from '../typechain/Token.d';
@@ -14,15 +14,15 @@ export const DEFAULT_POA_KEY = '0xc87509a1c067bbde78beb793e6fa76530b6382a4c0241e
 // All deployable contracts.
 export interface DeployedContracts {
     fuelMessagePortal: FuelMessagePortal;
-    fuelChainConsensus: FuelChainConsensus;
+    fuelChainState: FuelChainState;
     fuelERC20Gateway: FuelERC20Gateway;
 }
 export interface DeployedContractAddresses {
     FuelMessagePortal: string;
-    FuelChainConsensus: string;
+    FuelChainState: string;
     FuelERC20Gateway: string;
     FuelMessagePortal_impl: string;
-    FuelChainConsensus_impl: string;
+    FuelChainState_impl: string;
     FuelERC20Gateway_impl: string;
 }
 
@@ -30,7 +30,7 @@ export interface DeployedContractAddresses {
 export interface HarnessObject {
     contractAddresses: DeployedContractAddresses;
     fuelMessagePortal: FuelMessagePortal;
-    fuelChainConsensus: FuelChainConsensus;
+    fuelChainState: FuelChainState;
     fuelERC20Gateway: FuelERC20Gateway;
     token: Token;
     poaSigner: SigningKey;
@@ -44,10 +44,10 @@ export interface HarnessObject {
 // Gets a blank set of addresses for the deployed contracts.
 export function getBlankAddresses(): DeployedContractAddresses {
     return {
-        FuelChainConsensus: '',
+        FuelChainState: '',
         FuelMessagePortal: '',
         FuelERC20Gateway: '',
-        FuelChainConsensus_impl: '',
+        FuelChainState_impl: '',
         FuelMessagePortal_impl: '',
         FuelERC20Gateway_impl: '',
     };
@@ -56,10 +56,10 @@ export function getBlankAddresses(): DeployedContractAddresses {
 // Gets the addresses of the deployed contracts.
 export async function getContractAddresses(contracts: DeployedContracts): Promise<DeployedContractAddresses> {
     return {
-        FuelChainConsensus: contracts.fuelChainConsensus.address,
+        FuelChainState: contracts.fuelChainState.address,
         FuelMessagePortal: contracts.fuelMessagePortal.address,
         FuelERC20Gateway: contracts.fuelERC20Gateway.address,
-        FuelChainConsensus_impl: await upgrades.erc1967.getImplementationAddress(contracts.fuelChainConsensus.address),
+        FuelChainState_impl: await upgrades.erc1967.getImplementationAddress(contracts.fuelChainState.address),
         FuelMessagePortal_impl: await upgrades.erc1967.getImplementationAddress(contracts.fuelMessagePortal.address),
         FuelERC20Gateway_impl: await upgrades.erc1967.getImplementationAddress(contracts.fuelERC20Gateway.address),
     };
@@ -92,7 +92,7 @@ export async function setupFuel(): Promise<HarnessObject> {
     // Return the Fuel harness object
     return {
         contractAddresses: await getContractAddresses(contracts),
-        fuelChainConsensus: contracts.fuelChainConsensus,
+        fuelChainState: contracts.fuelChainState,
         fuelMessagePortal: contracts.fuelMessagePortal,
         fuelERC20Gateway: contracts.fuelERC20Gateway,
         token,
@@ -109,16 +109,16 @@ export async function setupFuel(): Promise<HarnessObject> {
 export async function deployFuel(poaSignerAddress?: string): Promise<DeployedContracts> {
     poaSignerAddress = poaSignerAddress || (await ethers.getSigners())[0].address;
 
-    // Deploy fuel chain consensus contract
-    const FuelChainConsensus = await ethers.getContractFactory('FuelChainConsensus');
-    const fuelChainConsensus = (await upgrades.deployProxy(FuelChainConsensus, [poaSignerAddress], {
+    // Deploy fuel chain state contract
+    const FuelChainState = await ethers.getContractFactory('FuelChainState');
+    const fuelChainState = (await upgrades.deployProxy(FuelChainState, [poaSignerAddress], {
         initializer: 'initialize',
-    })) as FuelChainConsensus;
-    await fuelChainConsensus.deployed();
+    })) as FuelChainState;
+    await fuelChainState.deployed();
 
     // Deploy message portal contract
     const FuelMessagePortal = await ethers.getContractFactory('FuelMessagePortal');
-    const fuelMessagePortal = (await upgrades.deployProxy(FuelMessagePortal, [fuelChainConsensus.address], {
+    const fuelMessagePortal = (await upgrades.deployProxy(FuelMessagePortal, [fuelChainState.address], {
         initializer: 'initialize',
     })) as FuelMessagePortal;
     await fuelMessagePortal.deployed();
@@ -132,7 +132,7 @@ export async function deployFuel(poaSignerAddress?: string): Promise<DeployedCon
 
     // Return deployed contracts
     return {
-        fuelChainConsensus,
+        fuelChainState,
         fuelMessagePortal,
         fuelERC20Gateway,
     };
@@ -143,10 +143,10 @@ export async function upgradeFuel(
     contracts: DeployedContractAddresses,
     signer?: Signer
 ): Promise<DeployedContractAddresses> {
-    // Upgrade fuel chain consensus contract
-    const FuelChainConsensus = await ethers.getContractFactory('FuelChainConsensus', signer);
-    await upgrades.forceImport(contracts.FuelChainConsensus, FuelChainConsensus, { kind: 'uups' });
-    await upgrades.upgradeProxy(contracts.FuelChainConsensus, FuelChainConsensus);
+    // Upgrade fuel chain state contract
+    const FuelChainState = await ethers.getContractFactory('FuelChainState', signer);
+    await upgrades.forceImport(contracts.FuelChainState, FuelChainState, { kind: 'uups' });
+    await upgrades.upgradeProxy(contracts.FuelChainState, FuelChainState);
 
     // Upgrade message portal contract
     const FuelMessagePortal = await ethers.getContractFactory('FuelMessagePortal', signer);
@@ -159,7 +159,7 @@ export async function upgradeFuel(
     await upgrades.upgradeProxy(contracts.FuelERC20Gateway, FuelERC20Gateway);
 
     // Return deployed contracts
-    contracts.FuelChainConsensus_impl = await upgrades.erc1967.getImplementationAddress(contracts.FuelChainConsensus);
+    contracts.FuelChainState_impl = await upgrades.erc1967.getImplementationAddress(contracts.FuelChainState);
     contracts.FuelMessagePortal_impl = await upgrades.erc1967.getImplementationAddress(contracts.FuelMessagePortal);
     contracts.FuelERC20Gateway_impl = await upgrades.erc1967.getImplementationAddress(contracts.FuelERC20Gateway);
     return contracts;

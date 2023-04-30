@@ -7,7 +7,7 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import {verifyBinaryTree} from "@fuel-contracts/merkle-sol/contracts/tree/binary/BinaryMerkleTree.sol";
-import {FuelChainConsensus} from "./FuelChainConsensus.sol";
+import {FuelChainState} from "./FuelChainState.sol";
 import {FuelBlockHeader, FuelBlockHeaderLib} from "./types/FuelBlockHeader.sol";
 import {FuelBlockHeaderLite, FuelBlockHeaderLiteLib} from "./types/FuelBlockHeaderLite.sol";
 import {SafeCall} from "../vendor/SafeCall.sol";
@@ -66,8 +66,8 @@ contract FuelMessagePortal is
     /// @notice Current message sender for other contracts to reference
     bytes32 internal _incomingMessageSender;
 
-    /// @notice The Fuel chain consensus contract
-    FuelChainConsensus private _fuelChainConsensus;
+    /// @notice The Fuel chain state contract
+    FuelChainState private _fuelChainState;
 
     /// @notice The waiting period for message root states (in milliseconds)
     uint64 private _incomingMessageTimelock;
@@ -89,8 +89,8 @@ contract FuelMessagePortal is
     }
 
     /// @notice Contract initializer to setup starting values
-    /// @param fuelChainConsensus Consensus contract
-    function initialize(FuelChainConsensus fuelChainConsensus) public initializer {
+    /// @param fuelChainState Chain state contract
+    function initialize(FuelChainState fuelChainState) public initializer {
         __Pausable_init();
         __AccessControl_init();
         __ReentrancyGuard_init();
@@ -100,8 +100,8 @@ contract FuelMessagePortal is
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
 
-        //consensus contract
-        _fuelChainConsensus = fuelChainConsensus;
+        //chain state contract
+        _fuelChainState = fuelChainState;
 
         //outgoing message data
         _outgoingMessageNonce = 0;
@@ -141,10 +141,10 @@ contract FuelMessagePortal is
         return uint8(FUEL_BASE_ASSET_DECIMALS);
     }
 
-    /// @notice Gets the set Fuel chain consensus contract
-    /// @return fuel chain consensus contract
-    function fuelChainConsensusContract() public view returns (address) {
-        return address(_fuelChainConsensus);
+    /// @notice Gets the set Fuel chain state contract
+    /// @return fuel chain state contract
+    function fuelChainStateContract() public view returns (address) {
+        return address(_fuelChainState);
     }
 
     ///////////////////////////////////////
@@ -164,10 +164,7 @@ contract FuelMessagePortal is
         bytes calldata poaSignature
     ) external payable whenNotPaused {
         //verify block header
-        require(
-            _fuelChainConsensus.verifyBlock(blockHeader.computeConsensusHeaderHash(), poaSignature),
-            "Invalid block"
-        );
+        require(_fuelChainState.verifyBlock(blockHeader.computeConsensusHeaderHash(), poaSignature), "Invalid block");
 
         //execute message
         _executeMessageInHeader(message, blockHeader, messageInBlockProof);
@@ -191,7 +188,7 @@ contract FuelMessagePortal is
     ) external payable whenNotPaused {
         //verify root block header
         require(
-            _fuelChainConsensus.verifyBlock(rootBlockHeader.computeConsensusHeaderHash(), poaSignature),
+            _fuelChainState.verifyBlock(rootBlockHeader.computeConsensusHeaderHash(), poaSignature),
             "Invalid root block"
         );
 
