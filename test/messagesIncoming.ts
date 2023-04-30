@@ -238,8 +238,8 @@ describe('Incoming Messages', async () => {
         prevBlockNodes = constructTree(blockIds);
         blockIds.push(computeBlockId(endOfCommitIntervalHeader));
 
-        // finalize blocks in the consensus contract
-        await env.fuelChainConsensus.commit(computeBlockId(endOfCommitIntervalHeader), 0);
+        // finalize blocks in the state contract
+        await env.fuelChainState.commit(computeBlockId(endOfCommitIntervalHeader), 0);
         ethers.provider.send('evm_increaseTime', [TIME_TO_FINALIZE]);
 
         // create an unfinalized block
@@ -250,7 +250,7 @@ describe('Incoming Messages', async () => {
             messageCount,
             messagesRoot
         );
-        await env.fuelChainConsensus.commit(computeBlockId(unflinalizedBlock), 10);
+        await env.fuelChainState.commit(computeBlockId(unflinalizedBlock), 10);
 
         // make sure the portal has eth to relay
         await env.fuelMessagePortal.depositETH(EMPTY, {
@@ -258,7 +258,7 @@ describe('Incoming Messages', async () => {
         });
 
         // Verify contract getters
-        expect(await env.fuelMessagePortal.fuelChainConsensusContract()).to.equal(env.fuelChainConsensus.address);
+        expect(await env.fuelMessagePortal.fuelChainStateContract()).to.equal(env.fuelChainState.address);
         expect(await messageTester.fuelMessagePortal()).to.equal(env.fuelMessagePortal.address);
     });
 
@@ -662,7 +662,7 @@ describe('Incoming Messages', async () => {
             const reentrantTestRootBlock = createBlock(calcRoot(blockIds), blockIds.length, tai64Time.toHexString());
             const reentrantTestPrevBlockNodes = constructTree(blockIds);
             const reentrantTestRootBlockId = computeBlockId(reentrantTestRootBlock);
-            await env.fuelChainConsensus.commit(reentrantTestRootBlockId, 1);
+            await env.fuelChainState.commit(reentrantTestRootBlockId, 1);
             ethers.provider.send('evm_increaseTime', [TIME_TO_FINALIZE]);
 
             // generate proof for relaying reentrant message

@@ -272,8 +272,8 @@ describe('ERC20 Gateway', async () => {
         endOfCommitIntervalHeaderLite = generateBlockHeaderLite(endOfCommitIntervalHeader);
         prevBlockNodes = constructTree(blockIds);
 
-        // finalize blocks in the consensus contract
-        await env.fuelChainConsensus.commit(computeBlockId(endOfCommitIntervalHeader), 0);
+        // finalize blocks in the state contract
+        await env.fuelChainState.commit(computeBlockId(endOfCommitIntervalHeader), 0);
         ethers.provider.send('evm_increaseTime', [TIME_TO_FINALIZE]);
 
         // set token approval for gateway

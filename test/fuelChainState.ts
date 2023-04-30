@@ -26,7 +26,7 @@ function createBlock(height: number): BlockHeader {
     return header;
 }
 
-describe('Fuel Chain Consensus', async () => {
+describe('Fuel Chain State', async () => {
     let env: HarnessObject;
 
     // Contract constants
@@ -45,13 +45,13 @@ describe('Fuel Chain Consensus', async () => {
         // Create, commit, finalize a block
         blockHeader = createBlock(0);
         blockId = computeBlockId(blockHeader);
-        await env.fuelChainConsensus.commit(blockId, 0);
+        await env.fuelChainState.commit(blockId, 0);
         ethers.provider.send('evm_increaseTime', [TIME_TO_FINALIZE]);
 
         // Create an unfinalized block
         blockHeaderUnfinalized = createBlock(BLOCKS_PER_COMMIT_INTERVAL);
         blockIdUnfinalized = computeBlockId(blockHeaderUnfinalized);
-        await env.fuelChainConsensus.commit(blockIdUnfinalized, 1);
+        await env.fuelChainState.commit(blockIdUnfinalized, 1);
     });
 
     describe('Verify access control', async () => {
@@ -67,80 +67,78 @@ describe('Fuel Chain Consensus', async () => {
         });
 
         it('Should be able to grant admin role', async () => {
-            expect(await env.fuelChainConsensus.hasRole(defaultAdminRole, signer1)).to.equal(false);
+            expect(await env.fuelChainState.hasRole(defaultAdminRole, signer1)).to.equal(false);
 
             // Grant admin role
-            await expect(env.fuelChainConsensus.grantRole(defaultAdminRole, signer1)).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.hasRole(defaultAdminRole, signer1)).to.equal(true);
+            await expect(env.fuelChainState.grantRole(defaultAdminRole, signer1)).to.not.be.reverted;
+            expect(await env.fuelChainState.hasRole(defaultAdminRole, signer1)).to.equal(true);
         });
 
         it('Should be able to renounce admin role', async () => {
-            expect(await env.fuelChainConsensus.hasRole(defaultAdminRole, signer0)).to.equal(true);
+            expect(await env.fuelChainState.hasRole(defaultAdminRole, signer0)).to.equal(true);
 
             // Revoke admin role
-            await expect(env.fuelChainConsensus.renounceRole(defaultAdminRole, signer0)).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.hasRole(defaultAdminRole, signer0)).to.equal(false);
+            await expect(env.fuelChainState.renounceRole(defaultAdminRole, signer0)).to.not.be.reverted;
+            expect(await env.fuelChainState.hasRole(defaultAdminRole, signer0)).to.equal(false);
         });
 
         it('Should not be able to grant admin role as non-admin', async () => {
-            expect(await env.fuelChainConsensus.hasRole(defaultAdminRole, signer0)).to.equal(false);
+            expect(await env.fuelChainState.hasRole(defaultAdminRole, signer0)).to.equal(false);
 
             // Attempt grant admin role
-            await expect(env.fuelChainConsensus.grantRole(defaultAdminRole, signer0)).to.be.revertedWith(
+            await expect(env.fuelChainState.grantRole(defaultAdminRole, signer0)).to.be.revertedWith(
                 `AccessControl: account ${env.addresses[0].toLowerCase()} is missing role ${defaultAdminRole}`
             );
-            expect(await env.fuelChainConsensus.hasRole(defaultAdminRole, signer0)).to.equal(false);
+            expect(await env.fuelChainState.hasRole(defaultAdminRole, signer0)).to.equal(false);
         });
 
         it('Should be able to grant then revoke admin role', async () => {
-            expect(await env.fuelChainConsensus.hasRole(defaultAdminRole, signer0)).to.equal(false);
-            expect(await env.fuelChainConsensus.hasRole(defaultAdminRole, signer1)).to.equal(true);
+            expect(await env.fuelChainState.hasRole(defaultAdminRole, signer0)).to.equal(false);
+            expect(await env.fuelChainState.hasRole(defaultAdminRole, signer1)).to.equal(true);
 
             // Grant admin role
-            await expect(env.fuelChainConsensus.connect(env.signers[1]).grantRole(defaultAdminRole, signer0)).to.not.be
+            await expect(env.fuelChainState.connect(env.signers[1]).grantRole(defaultAdminRole, signer0)).to.not.be
                 .reverted;
-            expect(await env.fuelChainConsensus.hasRole(defaultAdminRole, signer0)).to.equal(true);
+            expect(await env.fuelChainState.hasRole(defaultAdminRole, signer0)).to.equal(true);
 
             // Revoke previous admin
-            await expect(env.fuelChainConsensus.revokeRole(defaultAdminRole, signer1)).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.hasRole(defaultAdminRole, signer1)).to.equal(false);
+            await expect(env.fuelChainState.revokeRole(defaultAdminRole, signer1)).to.not.be.reverted;
+            expect(await env.fuelChainState.hasRole(defaultAdminRole, signer1)).to.equal(false);
         });
 
         it('Should be able to grant pauser role', async () => {
-            expect(await env.fuelChainConsensus.hasRole(pauserRole, signer1)).to.equal(false);
+            expect(await env.fuelChainState.hasRole(pauserRole, signer1)).to.equal(false);
 
             // Grant pauser role
-            await expect(env.fuelChainConsensus.grantRole(pauserRole, signer1)).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.hasRole(pauserRole, signer1)).to.equal(true);
+            await expect(env.fuelChainState.grantRole(pauserRole, signer1)).to.not.be.reverted;
+            expect(await env.fuelChainState.hasRole(pauserRole, signer1)).to.equal(true);
         });
 
         it('Should not be able to grant permission as pauser', async () => {
-            expect(await env.fuelChainConsensus.hasRole(defaultAdminRole, signer2)).to.equal(false);
-            expect(await env.fuelChainConsensus.hasRole(pauserRole, signer2)).to.equal(false);
+            expect(await env.fuelChainState.hasRole(defaultAdminRole, signer2)).to.equal(false);
+            expect(await env.fuelChainState.hasRole(pauserRole, signer2)).to.equal(false);
 
             // Attempt grant admin role
             await expect(
-                env.fuelChainConsensus.connect(env.signers[1]).grantRole(defaultAdminRole, signer2)
+                env.fuelChainState.connect(env.signers[1]).grantRole(defaultAdminRole, signer2)
             ).to.be.revertedWith(
                 `AccessControl: account ${env.addresses[1].toLowerCase()} is missing role ${defaultAdminRole}`
             );
-            expect(await env.fuelChainConsensus.hasRole(defaultAdminRole, signer2)).to.equal(false);
+            expect(await env.fuelChainState.hasRole(defaultAdminRole, signer2)).to.equal(false);
 
             // Attempt grant pauser role
-            await expect(
-                env.fuelChainConsensus.connect(env.signers[1]).grantRole(pauserRole, signer2)
-            ).to.be.revertedWith(
+            await expect(env.fuelChainState.connect(env.signers[1]).grantRole(pauserRole, signer2)).to.be.revertedWith(
                 `AccessControl: account ${env.addresses[1].toLowerCase()} is missing role ${defaultAdminRole}`
             );
-            expect(await env.fuelChainConsensus.hasRole(pauserRole, signer2)).to.equal(false);
+            expect(await env.fuelChainState.hasRole(pauserRole, signer2)).to.equal(false);
         });
 
         it('Should be able to revoke pauser role', async () => {
-            expect(await env.fuelChainConsensus.hasRole(pauserRole, signer1)).to.equal(true);
+            expect(await env.fuelChainState.hasRole(pauserRole, signer1)).to.equal(true);
 
             // Grant pauser role
-            await expect(env.fuelChainConsensus.revokeRole(pauserRole, signer1)).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.hasRole(pauserRole, signer1)).to.equal(false);
+            await expect(env.fuelChainState.revokeRole(pauserRole, signer1)).to.not.be.reverted;
+            expect(await env.fuelChainState.hasRole(pauserRole, signer1)).to.equal(false);
         });
     });
 
@@ -155,53 +153,53 @@ describe('Fuel Chain Consensus', async () => {
         });
 
         it('Should be able to set comitter as admin', async () => {
-            expect(await env.fuelChainConsensus.hasRole(committerRole, signer1)).to.equal(false);
+            expect(await env.fuelChainState.hasRole(committerRole, signer1)).to.equal(false);
 
             // Set comitter
-            await expect(env.fuelChainConsensus.grantRole(committerRole, signer1)).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.hasRole(committerRole, signer1)).to.equal(true);
+            await expect(env.fuelChainState.grantRole(committerRole, signer1)).to.not.be.reverted;
+            expect(await env.fuelChainState.hasRole(committerRole, signer1)).to.equal(true);
         });
 
         it('Should not be able to set committer role as non-admin', async () => {
-            expect(await env.fuelChainConsensus.hasRole(committerRole, signer2)).to.equal(false);
+            expect(await env.fuelChainState.hasRole(committerRole, signer2)).to.equal(false);
 
             // Attempt set comitter
             await expect(
-                env.fuelChainConsensus.connect(env.signers[1]).grantRole(committerRole, signer2)
+                env.fuelChainState.connect(env.signers[1]).grantRole(committerRole, signer2)
             ).to.be.revertedWith(
                 `AccessControl: account ${env.addresses[1].toLowerCase()} is missing role ${defaultAdminRole}`
             );
-            expect(await env.fuelChainConsensus.hasRole(committerRole, signer2)).to.equal(false);
+            expect(await env.fuelChainState.hasRole(committerRole, signer2)).to.equal(false);
         });
 
         it('Should not be able to make commits as non-comitter', async () => {
-            const blockHash = await env.fuelChainConsensus.blockHashAtCommit(9);
-            await expect(env.fuelChainConsensus.connect(env.signers[2]).commit(randomBytes32(), 9)).to.be.revertedWith(
+            const blockHash = await env.fuelChainState.blockHashAtCommit(9);
+            await expect(env.fuelChainState.connect(env.signers[2]).commit(randomBytes32(), 9)).to.be.revertedWith(
                 `AccessControl: account ${env.addresses[2].toLowerCase()} is missing role ${committerRole}`
             );
-            expect(await env.fuelChainConsensus.blockHashAtCommit(9)).to.equal(blockHash);
+            expect(await env.fuelChainState.blockHashAtCommit(9)).to.equal(blockHash);
         });
 
         it('Should be able to make commits as comitter', async () => {
             const blockHash = randomBytes32();
-            await expect(env.fuelChainConsensus.connect(env.signers[1]).commit(blockHash, 9)).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.blockHashAtCommit(9)).to.equal(blockHash);
+            await expect(env.fuelChainState.connect(env.signers[1]).commit(blockHash, 9)).to.not.be.reverted;
+            expect(await env.fuelChainState.blockHashAtCommit(9)).to.equal(blockHash);
         });
     });
 
     describe('Verify valid blocks', async () => {
         it('Should be able to verify valid block', async () => {
-            expect(await env.fuelChainConsensus.finalized(blockId, 0)).to.be.equal(true);
+            expect(await env.fuelChainState.finalized(blockId, 0)).to.be.equal(true);
         });
 
         it('Should not be able to verify unfinalized block', async () => {
-            expect(await env.fuelChainConsensus.finalized(blockIdUnfinalized, BLOCKS_PER_COMMIT_INTERVAL)).to.be.equal(
+            expect(await env.fuelChainState.finalized(blockIdUnfinalized, BLOCKS_PER_COMMIT_INTERVAL)).to.be.equal(
                 false
             );
         });
 
         it('Should not be able to verify invalid block', async () => {
-            await expect(env.fuelChainConsensus.finalized(randomBytes32(), 0)).to.be.revertedWith('Unknown block');
+            await expect(env.fuelChainState.finalized(randomBytes32(), 0)).to.be.revertedWith('Unknown block');
         });
     });
 
@@ -210,77 +208,77 @@ describe('Fuel Chain Consensus', async () => {
         const pauserRole = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('PAUSER_ROLE'));
 
         it('Should be able to grant pauser role', async () => {
-            expect(await env.fuelChainConsensus.hasRole(pauserRole, env.addresses[2])).to.equal(false);
+            expect(await env.fuelChainState.hasRole(pauserRole, env.addresses[2])).to.equal(false);
 
             // Grant pauser role
-            await expect(env.fuelChainConsensus.grantRole(pauserRole, env.addresses[2])).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.hasRole(pauserRole, env.addresses[2])).to.equal(true);
+            await expect(env.fuelChainState.grantRole(pauserRole, env.addresses[2])).to.not.be.reverted;
+            expect(await env.fuelChainState.hasRole(pauserRole, env.addresses[2])).to.equal(true);
         });
 
         it('Should not be able to pause as non-pauser', async () => {
-            expect(await env.fuelChainConsensus.paused()).to.be.equal(false);
+            expect(await env.fuelChainState.paused()).to.be.equal(false);
 
             // Attempt pause
-            await expect(env.fuelChainConsensus.connect(env.signers[1]).pause()).to.be.revertedWith(
+            await expect(env.fuelChainState.connect(env.signers[1]).pause()).to.be.revertedWith(
                 `AccessControl: account ${env.addresses[1].toLowerCase()} is missing role ${pauserRole}`
             );
-            expect(await env.fuelChainConsensus.paused()).to.be.equal(false);
+            expect(await env.fuelChainState.paused()).to.be.equal(false);
         });
 
         it('Should be able to pause as pauser', async () => {
-            expect(await env.fuelChainConsensus.paused()).to.be.equal(false);
+            expect(await env.fuelChainState.paused()).to.be.equal(false);
 
             // Pause
-            await expect(env.fuelChainConsensus.connect(env.signers[2]).pause()).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.paused()).to.be.equal(true);
+            await expect(env.fuelChainState.connect(env.signers[2]).pause()).to.not.be.reverted;
+            expect(await env.fuelChainState.paused()).to.be.equal(true);
         });
 
         it('Should not be able to unpause as pauser (and not admin)', async () => {
-            expect(await env.fuelChainConsensus.paused()).to.be.equal(true);
+            expect(await env.fuelChainState.paused()).to.be.equal(true);
 
             // Attempt unpause
-            await expect(env.fuelChainConsensus.connect(env.signers[2]).unpause()).to.be.revertedWith(
+            await expect(env.fuelChainState.connect(env.signers[2]).unpause()).to.be.revertedWith(
                 `AccessControl: account ${env.addresses[2].toLowerCase()} is missing role ${defaultAdminRole}`
             );
-            expect(await env.fuelChainConsensus.paused()).to.be.equal(true);
+            expect(await env.fuelChainState.paused()).to.be.equal(true);
         });
 
         it('Should not be able to unpause as non-admin', async () => {
-            expect(await env.fuelChainConsensus.paused()).to.be.equal(true);
+            expect(await env.fuelChainState.paused()).to.be.equal(true);
 
             // Attempt unpause
-            await expect(env.fuelChainConsensus.connect(env.signers[1]).unpause()).to.be.revertedWith(
+            await expect(env.fuelChainState.connect(env.signers[1]).unpause()).to.be.revertedWith(
                 `AccessControl: account ${env.addresses[1].toLowerCase()} is missing role ${defaultAdminRole}`
             );
-            expect(await env.fuelChainConsensus.paused()).to.be.equal(true);
+            expect(await env.fuelChainState.paused()).to.be.equal(true);
         });
 
         it('Should not be able to verify blocks when paused', async () => {
-            await expect(env.fuelChainConsensus.finalized(blockId, 0)).to.be.revertedWith('Pausable: paused');
+            await expect(env.fuelChainState.finalized(blockId, 0)).to.be.revertedWith('Pausable: paused');
         });
 
         it('Should not be able to commit blocks when paused', async () => {
-            await expect(env.fuelChainConsensus.commit(randomBytes32(), 9)).to.be.revertedWith('Pausable: paused');
+            await expect(env.fuelChainState.commit(randomBytes32(), 9)).to.be.revertedWith('Pausable: paused');
         });
 
         it('Should be able to unpause as admin', async () => {
-            expect(await env.fuelChainConsensus.paused()).to.be.equal(true);
+            expect(await env.fuelChainState.paused()).to.be.equal(true);
 
             // Unpause
-            await expect(env.fuelChainConsensus.unpause()).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.paused()).to.be.equal(false);
+            await expect(env.fuelChainState.unpause()).to.not.be.reverted;
+            expect(await env.fuelChainState.paused()).to.be.equal(false);
         });
 
         it('Should be able to verify block when unpaused', async () => {
-            expect(await env.fuelChainConsensus.finalized(blockId, 0)).to.be.equal(true);
+            expect(await env.fuelChainState.finalized(blockId, 0)).to.be.equal(true);
         });
 
         it('Should be able to revoke pauser role', async () => {
-            expect(await env.fuelChainConsensus.hasRole(pauserRole, env.addresses[2])).to.equal(true);
+            expect(await env.fuelChainState.hasRole(pauserRole, env.addresses[2])).to.equal(true);
 
             // Grant pauser role
-            await expect(env.fuelChainConsensus.revokeRole(pauserRole, env.addresses[2])).to.not.be.reverted;
-            expect(await env.fuelChainConsensus.hasRole(pauserRole, env.addresses[2])).to.equal(false);
+            await expect(env.fuelChainState.revokeRole(pauserRole, env.addresses[2])).to.not.be.reverted;
+            expect(await env.fuelChainState.hasRole(pauserRole, env.addresses[2])).to.equal(false);
         });
     });
 });

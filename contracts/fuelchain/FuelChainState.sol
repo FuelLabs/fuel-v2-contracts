@@ -16,8 +16,8 @@ struct Commit {
     uint16 reserved2;
 }
 
-/// @notice The Fuel v2 chain state consensus
-contract FuelChainConsensus is Initializable, PausableUpgradeable, AccessControlUpgradeable, UUPSUpgradeable {
+/// @notice The Fuel v2 chain state
+contract FuelChainState is Initializable, PausableUpgradeable, AccessControlUpgradeable, UUPSUpgradeable {
     ///////////////
     // Constants //
     ///////////////
