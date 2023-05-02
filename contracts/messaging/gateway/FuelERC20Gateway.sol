@@ -183,7 +183,6 @@ contract FuelERC20Gateway is
     /// @param fuelTokenId ID of the token on Fuel that represent the deposited tokens
     /// @param amount Amount of tokens to deposit
     /// @param messageData The data of the message to send for deposit
-    /// @dev Made payable to reduce gas costs
     function _deposit(address tokenId, bytes32 fuelTokenId, uint256 amount, bytes memory messageData) private {
         require(amount > 0, "Cannot deposit zero");
 
