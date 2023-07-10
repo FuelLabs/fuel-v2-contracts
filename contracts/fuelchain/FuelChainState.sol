@@ -14,6 +14,7 @@ struct Commit {
     uint32 timestamp;
     address reserved1;
     uint16 reserved2;
+    uint256 commitHeight;
 }
 
 /// @notice The Fuel v2 chain state
@@ -90,6 +91,7 @@ contract FuelChainState is Initializable, PausableUpgradeable, AccessControlUpgr
         Commit storage commitSlot = _commitSlots[slot];
         commitSlot.blockHash = blockHash;
         commitSlot.timestamp = uint32(block.timestamp);
+        commitSlot.commitHeight = commitHeight;
 
         emit CommitSubmitted(commitHeight, blockHash);
     }
@@ -115,6 +117,7 @@ contract FuelChainState is Initializable, PausableUpgradeable, AccessControlUpgr
     /// @return hash of the block at the given commit height
     function blockHashAtCommit(uint256 commitHeight) external view returns (bytes32) {
         Commit storage commitSlot = _commitSlots[commitHeight % NUM_COMMIT_SLOTS];
+        require(commitSlot.commitHeight == commitHeight, "Unavailable block");
         return commitSlot.blockHash;
     }
 

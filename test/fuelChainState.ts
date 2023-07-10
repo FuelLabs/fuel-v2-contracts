@@ -173,11 +173,19 @@ describe('Fuel Chain State', async () => {
         });
 
         it('Should not be able to make commits as non-comitter', async () => {
-            const blockHash = await env.fuelChainState.blockHashAtCommit(9);
-            await expect(env.fuelChainState.connect(env.signers[2]).commit(randomBytes32(), 9)).to.be.revertedWith(
+            const blockHeight = 9;
+            const blockHeader = createBlock(blockHeight);
+            const blockId = computeBlockId(blockHeader);
+
+            await env.fuelChainState.commit(blockId, blockHeight);
+            const blockHash = await env.fuelChainState.blockHashAtCommit(blockHeight);
+
+            await expect(
+                env.fuelChainState.connect(env.signers[2]).commit(randomBytes32(), blockHeight)
+            ).to.be.revertedWith(
                 `AccessControl: account ${env.addresses[2].toLowerCase()} is missing role ${committerRole}`
             );
-            expect(await env.fuelChainState.blockHashAtCommit(9)).to.equal(blockHash);
+            expect(await env.fuelChainState.blockHashAtCommit(blockHeight)).to.equal(blockHash);
         });
 
         it('Should be able to make commits as comitter', async () => {
@@ -200,6 +208,13 @@ describe('Fuel Chain State', async () => {
 
         it('Should not be able to verify invalid block', async () => {
             await expect(env.fuelChainState.finalized(randomBytes32(), 0)).to.be.revertedWith('Unknown block');
+        });
+    });
+
+    describe('Query blocks', () => {
+        it('Should not be able to query unavailable blocks', async () => {
+            const commitSlots = await env.fuelChainState.NUM_COMMIT_SLOTS();
+            await expect(env.fuelChainState.blockHashAtCommit(commitSlots)).to.be.revertedWith('Unavailable block');
         });
     });
 
