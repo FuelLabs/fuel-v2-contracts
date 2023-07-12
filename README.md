@@ -1,3 +1,7 @@
+# ⚠️ Archival Notice
+
+This repo has been migrated to https://github.com/FuelLabs/fuel-bridge
+
 # Fuel Solidity Contracts
 
 <!-- Disable markdownlint for long lines. -->
